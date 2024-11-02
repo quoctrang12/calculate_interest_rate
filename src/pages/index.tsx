@@ -36,7 +36,7 @@ export const HomePage: FC = () => {
     setInputAmount((e) => ({ ...e, amountFee: value.target.value || "" }));
   }}
 />
-        <label className="text-start">Số tiền lãi</label>
+        {/* <label className="text-start">Số tiền lãi</label>
 
       <CurrencyInput
         className="form-control"
@@ -45,7 +45,7 @@ export const HomePage: FC = () => {
         disabled
         decimalScale={0}
         value={+inputAmount.amountFee?.replace(",", ".")/100*(+inputAmount.amountLens) || ""}
-      />
+      /> */}
         <label className="text-start">Kỳ hạn (Tháng)</label>
 
       <Input
@@ -67,8 +67,9 @@ export const HomePage: FC = () => {
           inputAmount.amountLens &&
           inputAmount.amountFee &&
           inputAmount.months &&
-          (+inputAmount.amountLens + (+inputAmount.amountFee?.replace(",", ".")/100*(+inputAmount.amountLens) )) /
-            +inputAmount.months
+          (+inputAmount.amountLens + ((+inputAmount.amountFee?.replace(",", ".")/100)*(+inputAmount.amountLens)*(+inputAmount.months/12) )) /
+            +inputAmount.months + (1000-((+inputAmount.amountLens + ((+inputAmount.amountFee?.replace(",", ".")/100)*(+inputAmount.amountLens)*(+inputAmount.months/12) )) /
+            +inputAmount.months)%1000)
         }
       />
       <button className="btn btn-danger w-100 mt-2" onClick={()=>{setInputAmount({amountLens:"",amountFee:"",months: ""})}}>Xóa tất cả</button>
