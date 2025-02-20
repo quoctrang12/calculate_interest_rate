@@ -9,10 +9,11 @@ export default function MainRoute(){
         <BrowserRouter >
             <Routes >
                 <Route path="/" element={<App/>}>
-                    <Route path="/" element={<HomePage/>} />
+                    <Route path="/calculate" element={<HomePage/>} />
                     <Route path="/*" element={<Navigate to={"/"}/>} />
+                <Route path="/" element={<WeddingPage/>} />
+
                 </Route>
-                <Route path="/wedding" element={<WeddingPage/>} />
             </Routes>
         </BrowserRouter>
     )
