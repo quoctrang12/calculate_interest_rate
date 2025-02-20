@@ -10,7 +10,7 @@ export default function MainRoute(){
             <Routes >
                 <Route path="/" element={<App/>}>
                     <Route path="/" element={<HomePage/>} />
-                    <Route path="wedding" element={<WeddingPage/>} />
+                    <Route path="/wedding" element={<WeddingPage/>} />
                     <Route path="/*" element={<Navigate to={"/"}/>} />
                 </Route>
             </Routes>
