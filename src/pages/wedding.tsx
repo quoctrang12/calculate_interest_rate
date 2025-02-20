@@ -599,7 +599,7 @@ export default function WeddingPage() {
                       </p>
                       <a
                         className="fw-bold fs-6 d-none text-center text-decoration-none text-white"
-                        tabindex="0"
+                        tabIndex={0}
                         role="button"
                         id="btn-show-story"
                         data-bs-toggle="popover"
@@ -648,7 +648,7 @@ export default function WeddingPage() {
                       </p>
                       <a
                         className="fw-bold fs-6 d-none text-center text-decoration-none text-white"
-                        tabindex="0"
+                        tabIndex={0}
                         role="button"
                         id="btn-show-story"
                         data-bs-toggle="popover"
@@ -907,7 +907,7 @@ export default function WeddingPage() {
       </div>
       <div
         className="offcanvas offcanvas-end offcanvas-menu"
-        tabindex="-1"
+        tabIndex={-1}
         id="offcanvasNavbar"
         data-bs-scroll="true"
         data-bs-backdrop="true"
