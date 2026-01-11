@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Employee, LunchRecord, LunchItem } from '../types';
-import { ChevronLeft, ChevronRight, Check, X, Edit2, StickyNote, DollarSign } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Check, X, DollarSign } from 'lucide-react';
 
 interface CalendarViewProps {
   employees: Employee[];

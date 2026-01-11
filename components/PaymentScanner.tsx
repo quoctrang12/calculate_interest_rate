@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { parsePaymentNotification } from '../services/geminiService';
 import { Employee } from '../types';
-import { ScanLine, CheckCircle, AlertCircle, Loader2, ArrowRight, ShieldCheck } from 'lucide-react';
+import { ScanLine, CheckCircle, AlertCircle, Loader2, ShieldCheck } from 'lucide-react';
 
 interface PaymentScannerProps {
   employees: Employee[];

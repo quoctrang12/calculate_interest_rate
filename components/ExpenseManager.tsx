@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { ExpenseRecord } from '../types';
-import { ChevronLeft, ChevronRight, Plus, Trash2, Calendar as CalIcon, BarChart3, Receipt, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus, Trash2, Calendar as CalIcon, BarChart3, X } from 'lucide-react';
 
 interface ExpenseManagerProps {
   expenses: ExpenseRecord[];
