@@ -451,7 +451,7 @@ export default function App() {
           {navItems.map((item) => {
             const isActive = activeTab === item.id;
             // Handle dynamic styling for expenses
-            const activeLineClass = isActive ? `bg-${item.color.split('-')[1]}-500` : ''; 
+            // const activeLineClass = isActive ? `bg-${item.color.split('-')[1]}-500` : ''; 
             // Note: The above specific split is risky if classes change, but since we control navItems color prop (text-blue-600), it maps to bg-blue-500 roughly. 
             // However, item.color is e.g. 'text-orange-500'. Split gives 'orange'. 'bg-orange-500' works.
 
