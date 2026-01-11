@@ -167,8 +167,10 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
 
       {/* Modal for Employee Selection & Detail */}
       {selectedDateStr && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center animate-fade-in">
-          <div className="bg-white w-full sm:max-w-lg h-[90vh] sm:h-[80vh] sm:rounded-2xl rounded-t-3xl shadow-2xl flex flex-col">
+         // FIX: Tăng Z-Index lên 100 để đảm bảo modal đè lên Navbar (z-40)
+        <div className="fixed inset-0 bg-black/50 z-[100] flex items-end sm:items-center justify-center animate-fade-in">
+          {/* FIX: Sử dụng max-h dynamic để tránh tràn màn hình */}
+          <div className="bg-white w-full sm:max-w-lg h-[90dvh] sm:h-[80vh] sm:rounded-2xl rounded-t-3xl shadow-2xl flex flex-col">
             <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-gray-50 rounded-t-3xl sm:rounded-t-2xl">
               <div>
                 <h3 className="text-lg font-bold">Chi tiết ăn trưa</h3>
@@ -264,7 +266,8 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
               {employees.length === 0 && <p className="text-center text-gray-400 mt-8">Chưa có nhân viên nào.</p>}
             </div>
 
-            <div className="p-4 border-t border-gray-100 bg-white rounded-b-xl sm:rounded-b-2xl shadow-[0_-5px_10px_rgba(0,0,0,0.05)]">
+             {/* FIX: Thêm pb-safe-area để nút không bị dính đáy màn hình trên iPhone */}
+            <div className="p-4 border-t border-gray-100 bg-white rounded-b-xl sm:rounded-b-2xl shadow-[0_-5px_10px_rgba(0,0,0,0.05)] pb-safe-area">
               <button
                 onClick={saveAndClose}
                 className="w-full bg-blue-600 text-white py-3 rounded-xl font-bold hover:bg-blue-700 transition-colors shadow-lg shadow-blue-200"

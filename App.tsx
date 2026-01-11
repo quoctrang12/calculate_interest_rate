@@ -277,10 +277,11 @@ export default function App() {
 
   // --- Render ---
   return (
-    <div className="bg-gray-50 h-screen w-full overflow-hidden flex flex-col font-sans text-gray-900">
+     // FIX: Sử dụng h-dvh và fixed inset-0 để khóa layout, tránh lỗi scroll trên mobile
+    <div className="bg-gray-50 h-dvh w-full overflow-hidden flex flex-col font-sans text-gray-900 fixed inset-0">
       
       {/* Header */}
-      <header className="bg-white/85 backdrop-blur-xl border-b border-gray-100 px-4 py-3 flex justify-between items-center z-50 sticky top-0 shadow-sm transition-all">
+      <header className="bg-white/85 backdrop-blur-xl border-b border-gray-100 px-4 py-3 flex justify-between items-center z-40 sticky top-0 shadow-sm transition-all">
         <div className="flex items-center gap-3">
            <div className="bg-gradient-to-br from-blue-600 to-indigo-600 p-2 rounded-xl shadow-lg shadow-blue-200">
              <Layers size={20} className="text-white" />
@@ -455,7 +456,7 @@ export default function App() {
       </main>
 
       {/* Navigation */}
-      <nav className="bg-white/90 backdrop-blur-md border-t border-gray-200 pb-safe-area shadow-[0_-8px_30px_rgba(0,0,0,0.04)] z-50">
+      <nav className="bg-white/90 backdrop-blur-md border-t border-gray-200 pb-safe-area shadow-[0_-8px_30px_rgba(0,0,0,0.04)] z-40">
         <div className="flex justify-around items-center h-[3.5rem] px-2">
           {navItems.map((item) => {
             const isActive = activeTab === item.id;
