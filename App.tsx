@@ -277,8 +277,8 @@ export default function App() {
 
   // --- Render ---
   return (
-     // FIX: Sử dụng h-dvh và fixed inset-0 để khóa layout, tránh lỗi scroll trên mobile
-    <div className="bg-gray-50 h-dvh w-full overflow-hidden flex flex-col font-sans text-gray-900 fixed inset-0">
+        // FIX: Sử dụng h-[100dvh] để đảm bảo full chiều cao màn hình thiết bị, loại bỏ fixed inset-0 gây lỗi
+    <div className="bg-gray-50 h-[100dvh] w-full overflow-hidden flex flex-col font-sans text-gray-900 relative">
       
       {/* Header */}
       <header className="bg-white/85 backdrop-blur-xl border-b border-gray-100 px-4 py-3 flex justify-between items-center z-40 sticky top-0 shadow-sm transition-all">
