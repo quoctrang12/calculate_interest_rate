@@ -5,7 +5,7 @@ import { EmployeeList } from './components/EmployeeList';
 import { PaymentScanner } from './components/PaymentScanner';
 import { StatsView } from './components/StatsView';
 import { ExpenseManager } from './components/ExpenseManager';
-import { Calendar, Users, ScanLine, Settings, PieChart, Wallet, Layers, Check, Download, Upload, Trash2, Database, AlertTriangle } from 'lucide-react';
+import { Calendar, Users, ScanLine, Settings, PieChart, Wallet, Layers, Check, Download, Upload, Trash2, Database, AlertTriangle, Smartphone } from 'lucide-react';
 
 export default function App() {
   // --- State ---
@@ -32,6 +32,9 @@ export default function App() {
     return saved ? { ...defaultSettings, ...JSON.parse(saved) } : defaultSettings;
   });
 
+  // PWA Install Prompt State
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // --- Effects ---
@@ -51,7 +54,35 @@ export default function App() {
     localStorage.setItem('settings', JSON.stringify(settings));
   }, [settings]);
 
+  // Capture PWA install prompt
+  useEffect(() => {
+    const handler = (e: any) => {
+      // Prevent the mini-infobar from appearing on mobile
+      e.preventDefault();
+      // Stash the event so it can be triggered later.
+      setDeferredPrompt(e);
+    };
+
+    window.addEventListener('beforeinstallprompt', handler);
+
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handler);
+    };
+  }, []);
+
   // --- Actions ---
+
+  const handleInstallClick = async () => {
+    if (!deferredPrompt) return;
+    // Show the install prompt
+    deferredPrompt.prompt();
+    // Wait for the user to respond to the prompt
+    const { outcome } = await deferredPrompt.userChoice;
+    // Optionally, send analytics event with outcome of user choice
+    console.log(`User response to the install prompt: ${outcome}`);
+    // We've used the prompt, and can't use it again, throw it away
+    setDeferredPrompt(null);
+  };
 
   const addEmployee = (name: string) => {
     const newEmp: Employee = {
@@ -306,6 +337,24 @@ export default function App() {
 
           {activeTab === Tab.SETTINGS && (
             <div className="p-4 space-y-6 animate-fade-in pb-24">
+              {/* Install App Section (Only visible if installable) */}
+              {deferredPrompt && (
+                <div className="bg-gradient-to-r from-purple-600 to-indigo-600 rounded-2xl shadow-lg p-5 text-white">
+                  <h2 className="text-lg font-bold mb-2 flex items-center gap-2">
+                    <Smartphone size={20} /> Cài đặt ứng dụng
+                  </h2>
+                  <p className="text-sm text-indigo-100 mb-4 opacity-90">
+                    Cài đặt ứng dụng vào màn hình chính để truy cập nhanh hơn và sử dụng toàn màn hình.
+                  </p>
+                  <button 
+                    onClick={handleInstallClick}
+                    className="w-full bg-white text-indigo-600 py-3 rounded-xl font-bold hover:bg-indigo-50 transition-colors shadow-md"
+                  >
+                    Cài đặt ngay
+                  </button>
+                </div>
+              )}
+
               {/* General Settings */}
               <div className="bg-white rounded-2xl shadow-sm p-5 border border-gray-100">
                  <h2 className="text-lg font-bold text-gray-800 mb-6 flex items-center gap-2 border-b border-gray-100 pb-2">
@@ -402,7 +451,7 @@ export default function App() {
           {navItems.map((item) => {
             const isActive = activeTab === item.id;
             // Handle dynamic styling for expenses
-            // const activeLineClass = isActive ? `bg-${item.color.split('-')[1]}-500` : ''; 
+            const activeLineClass = isActive ? `bg-${item.color.split('-')[1]}-500` : ''; 
             // Note: The above specific split is risky if classes change, but since we control navItems color prop (text-blue-600), it maps to bg-blue-500 roughly. 
             // However, item.color is e.g. 'text-orange-500'. Split gives 'orange'. 'bg-orange-500' works.
 
