@@ -1,56 +1,26 @@
-<!doctype html>
-<html lang="en">
+<!DOCTYPE html>
+<html lang="vi">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Nhung Le</title>
-
-    <link href="https://fonts.googleapis.com/css2?family=Bellota+Text&display=swap" rel="stylesheet" />
-    <link href="https://fonts.googleapis.com/css2?family=Dancing+Script&display=swap" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css2?family=Texturina:opsz,wght@12..72,100&display=swap"
-        rel="stylesheet" />
-    <link href="https://fonts.googleapis.com/css2?family=Ephesis&display=swap" rel="stylesheet" />
-    <link href="https://fonts.googleapis.com/css2?family=Baloo+Paaji+2&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/css/libs.css?v=20241222" />
-    <link rel="stylesheet" href="/css/style.css?v=20241222" />
-    <link href="/css/calendar.css?v=20241222" rel="stylesheet">
-  </head>
-  <body>
-    <script type="text/javascript">
-      var photoGalleries = [];
-  </script>
-    <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
-  </body>
-  
-  <script type="text/javascript">
-    function sanitizeJsonString(jsonString) {
-        return jsonString
-            .replace(/[\n\r\t]/g, '')
-            .replace(/,(\s*[}\]])/g, '$1');
-    }
-    function parseJsonRecursively(jsonString) {
-        let sanitizedString = sanitizeJsonString(jsonString);
-        let parsed = JSON.parse(sanitizedString);
-        Object.keys(parsed).forEach(function (key) {
-            try {
-                let checkValue = JSON.parse(parsed[key]);
-                if (checkValue && checkValue.constructor === Object) {
-                    parsed[key] = checkValue;
-                }
-            } catch (e) {
-
-            }
-        });
-        return parsed;
-    }
-    let biicore = parseJsonRecursively('{"template_id":"643d7a7706109e990f016274","templatePremium":true,"themeRoot":"https:\/\/dq-yn.iwedding.info\/templates\/template133","webroot":"https:\/\/dq-yn.iwedding.info","coreSite":"","webToken":"67b5df33227d85fe5204da37","isPremium":true,"bgMusic":"https:\/\/cdn.biihappy.com\/ziiweb\/wedding-musics\/BeautifulInWhite-ShaneFilan-524801.mp3","alert":"[]","effect":"{\\\"type\\\":\\\"heart\\\"}","logo":"https:\/\/iwedding.info\/common\/imgs\/bii.png?v=20210131","url_landing_page":"https:\/\/biihappy.com\/iwedding","isAutoPlay":false,"footer_title":"iWedding | N\u1ec1n t\u1ea3ng t\u1ea1o website \u0111\u00e1m c\u01b0\u1edbi mi\u1ec5n ph\u00ed t\u1eeb Biihappy","footer_title_mobile":"T\u1ea1o website \u0111\u00e1m c\u01b0\u1edbi mi\u1ec5n ph\u00ed"}');
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>TrangNQ Tools</title>
+  <script type="importmap">
+{
+  "imports": {
+    "react": "https://esm.sh/react@^19.2.3",
+    "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
+    "react/": "https://esm.sh/react@^19.2.3/",
+    "@google/genai": "https://esm.sh/@google/genai@^1.35.0",
+    "lucide-react": "https://esm.sh/lucide-react@^0.562.0",
+    "vite": "https://esm.sh/vite@^7.3.1",
+    "@vitejs/plugin-react": "https://esm.sh/@vitejs/plugin-react@^5.1.2"
+  }
+}
 </script>
-<script src="/js/libs.js"></script>
-<script src="/js/script.js"></script>
-<script src="/js/calendar.js"></script>
-<script src="/js/biicommon.js"></script>
-<script src="/js/insertTextAtCursor.js"></script>
-<script type="module" src="/js/init.js"></script>
+<link rel="stylesheet" href="/index.css">
+</head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/index.tsx"></script>
+  </body>
 </html>

@@ -1,0 +1,187 @@
+import React, { useMemo, useState } from 'react';
+import { Employee, LunchRecord } from '../types';
+import { TrendingDown, TrendingUp, CalendarDays, ChevronLeft, ChevronRight, Receipt, LayoutList } from 'lucide-react';
+
+interface StatsViewProps {
+  employees: Employee[];
+  lunchRecords: LunchRecord[];
+  currencyFormatter: (val: number) => string;
+}
+
+export const StatsView: React.FC<StatsViewProps> = ({
+  employees,
+  lunchRecords,
+  currencyFormatter
+}) => {
+  const [currentDate, setCurrentDate] = useState(new Date());
+
+  const prevMonth = () => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1));
+  const nextMonth = () => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1));
+  
+  // Calculate stats
+  const stats = useMemo(() => {
+    // Format: YYYY-MM
+    const monthKey = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}`;
+    
+    // Filter records for selected month
+    const monthlyRecords = lunchRecords.filter(r => r.date.startsWith(monthKey));
+
+    let totalSpentMonth = 0;
+    
+    // -- Employee Overview Stats --
+    const empStats = employees.map(emp => {
+      // Find all lunch items for this employee in selected month
+      const meals = monthlyRecords.flatMap(record => {
+        const item = record.items.find(i => i.employeeId === emp.id);
+        return item ? [{ date: record.date, ...item }] : [];
+      });
+
+      const totalMealCost = meals.reduce((sum, m) => sum + m.price, 0);
+      totalSpentMonth += totalMealCost;
+
+      return {
+        ...emp,
+        mealCount: meals.length,
+        totalMealCost,
+        history: meals.sort((a, b) => b.date.localeCompare(a.date))
+      };
+    });
+    empStats.sort((a, b) => b.totalMealCost - a.totalMealCost);
+
+
+    // -- Weekly Breakdown Stats --
+    // Structure: Array of Weeks -> Array of Employee Spending in that week
+    const weeklyData: { week: number; start: string; end: string; employeeSpending: Record<string, number> }[] = [];
+    
+    monthlyRecords.forEach(record => {
+      const d = new Date(record.date);
+      // Determine week number (1-5ish) within the month
+      const day = d.getDate();
+      const weekNum = Math.ceil(day / 7);
+
+      let weekEntry = weeklyData.find(w => w.week === weekNum);
+      if (!weekEntry) {
+         weekEntry = { 
+           week: weekNum, 
+           start: `${weekNum * 7 - 6}/${d.getMonth() + 1}`,
+           end: `${Math.min(weekNum * 7, new Date(d.getFullYear(), d.getMonth()+1, 0).getDate())}/${d.getMonth() + 1}`,
+           employeeSpending: {} 
+         };
+         weeklyData.push(weekEntry);
+      }
+
+      record.items.forEach(item => {
+        if (!weekEntry!.employeeSpending[item.employeeId]) {
+          weekEntry!.employeeSpending[item.employeeId] = 0;
+        }
+        weekEntry!.employeeSpending[item.employeeId] += item.price;
+      });
+    });
+
+    // Sort weeks
+    weeklyData.sort((a, b) => a.week - b.week);
+
+    return { totalSpentMonth, empStats, weeklyData };
+  }, [employees, lunchRecords, currentDate]);
+
+  return (
+    <div className="p-4 pb-24 space-y-6">
+      {/* Month Navigation */}
+      <div className="flex justify-between items-center bg-white p-2 rounded-xl shadow-sm border border-gray-100">
+        <button onClick={prevMonth} className="p-2 hover:bg-gray-100 rounded-lg text-gray-600">
+          <ChevronLeft />
+        </button>
+        <div className="flex flex-col items-center">
+          <span className="text-xs text-gray-400 font-bold uppercase tracking-wider">Thống kê tháng</span>
+          <h2 className="text-lg font-bold text-gray-800">
+            {currentDate.getMonth() + 1} / {currentDate.getFullYear()}
+          </h2>
+        </div>
+        <button onClick={nextMonth} className="p-2 hover:bg-gray-100 rounded-lg text-gray-600">
+          <ChevronRight />
+        </button>
+      </div>
+
+      {/* Summary Card */}
+      <div className="bg-gradient-to-br from-blue-600 to-blue-700 p-5 rounded-2xl shadow-lg text-white">
+        <h2 className="text-blue-100 text-xs font-bold uppercase tracking-wider mb-1">Tổng chi tiêu tháng {currentDate.getMonth() + 1}</h2>
+        <div className="text-3xl font-bold">{currencyFormatter(stats.totalSpentMonth)}</div>
+      </div>
+
+      {/* Weekly Breakdown Section */}
+      <div className="space-y-3">
+        <h3 className="font-bold text-gray-800 text-lg flex items-center gap-2">
+           <LayoutList size={20} className="text-blue-600"/> 
+           Chi tiêu theo tuần
+        </h3>
+        {stats.weeklyData.length === 0 && <p className="text-gray-400 italic text-sm">Chưa có dữ liệu tuần.</p>}
+        
+        {stats.weeklyData.map(week => (
+           <div key={week.week} className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+              <div className="bg-gray-50 px-4 py-2 border-b border-gray-100 flex justify-between items-center">
+                 <span className="font-bold text-gray-700">Tuần {week.week} ({week.start} - {week.end})</span>
+              </div>
+              <div className="p-2 divide-y divide-gray-100">
+                 {Object.entries(week.employeeSpending)
+                    .sort(([, a], [, b]) => b - a) // Sort by spending desc
+                    .map(([empId, amount]) => {
+                      const emp = employees.find(e => e.id === empId);
+                      if (!emp) return null;
+                      return (
+                        <div key={empId} className="flex justify-between py-2 px-2 text-sm">
+                           <span className="text-gray-700">{emp.name}</span>
+                           <span className="font-medium text-red-500">-{currencyFormatter(amount)}</span>
+                        </div>
+                      );
+                    })}
+              </div>
+           </div>
+        ))}
+      </div>
+
+      {/* Employee Details Section */}
+      <div className="space-y-4 pt-4 border-t border-gray-200">
+        <div className="flex justify-between items-end px-1">
+          <h3 className="font-bold text-gray-800 text-lg">Tổng quan nhân viên</h3>
+          <span className="text-xs text-gray-500 italic">{stats.empStats.length} người</span>
+        </div>
+        
+        {stats.empStats.map(emp => (
+          <div key={emp.id} className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+             {/* Header */}
+             <div className="p-4 border-b border-gray-50 flex justify-between items-start">
+               <div>
+                 <div className="font-bold text-lg text-gray-900">{emp.name}</div>
+                 <div className="text-xs text-gray-500 mt-1 flex items-center gap-1">
+                   {emp.balance < 0 ? <TrendingDown size={12} className="text-red-500"/> : <TrendingUp size={12} className="text-green-500"/>}
+                   <span>Số dư hiện tại</span>
+                 </div>
+               </div>
+               <div className={`text-right ${emp.balance >= 0 ? 'text-green-600' : 'text-red-500'}`}>
+                 <div className="font-bold text-lg">{currencyFormatter(emp.balance)}</div>
+               </div>
+             </div>
+             
+             {/* Mini Dashboard for Selected Month */}
+             <div className="grid grid-cols-2 text-center divide-x divide-gray-50 bg-gray-50/50">
+               <div className="p-3">
+                 <div className="text-[10px] text-gray-400 uppercase font-bold mb-0.5">Số bữa ăn</div>
+                 <div className="text-sm font-semibold text-gray-700 flex items-center justify-center gap-1">
+                    <CalendarDays size={14} className="text-blue-500" />
+                    {emp.mealCount}
+                 </div>
+               </div>
+               <div className="p-3">
+                 <div className="text-[10px] text-gray-400 uppercase font-bold mb-0.5">Tiền ăn tháng này</div>
+                 <div className="text-sm font-semibold text-orange-600 flex items-center justify-center gap-1">
+                    <Receipt size={14} />
+                    {currencyFormatter(emp.totalMealCost)}
+                 </div>
+               </div>
+             </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
