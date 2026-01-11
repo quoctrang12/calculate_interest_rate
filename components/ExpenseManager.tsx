@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { ExpenseRecord } from '../types';
-import { ChevronLeft, ChevronRight, Plus, Trash2, Calendar as CalIcon, BarChart3, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus, Trash2, Calendar as CalIcon, BarChart3, X, Zap } from 'lucide-react';
 
 interface ExpenseManagerProps {
   expenses: ExpenseRecord[];
@@ -28,8 +28,29 @@ export const ExpenseManager: React.FC<ExpenseManagerProps> = ({
   const [newAmount, setNewAmount] = useState('');
   const [newNote, setNewNote] = useState('');
 
+  // --- Quick Entry State ---
+  const [showQuickAdd, setShowQuickAdd] = useState(false);
+  
+  // Initialize date with Local Date string
+  const getTodayString = () => {
+     const d = new Date();
+     return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  };
+
+  const [quickDate, setQuickDate] = useState(getTodayString);
+  const [quickTitle, setQuickTitle] = useState('');
+  const [quickAmount, setQuickAmount] = useState('');
+  const [quickNote, setQuickNote] = useState('');
+
   // --- Helpers ---
-  const formatDate = (date: Date) => date.toISOString().split('T')[0];
+  // Fix: Sử dụng Local Time
+  const formatDate = (date: Date) => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
   const prevMonth = () => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1));
   const nextMonth = () => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1));
 
@@ -68,9 +89,10 @@ export const ExpenseManager: React.FC<ExpenseManagerProps> = ({
     const weeklyData: { week: number; total: number; items: ExpenseRecord[] }[] = [];
     
     monthlyExpenses.forEach(e => {
-      const date = new Date(e.date);
+      // Parse manual date string (YYYY-MM-DD) to integer day to avoid UTC shift
+      const dayOfMonth = parseInt(e.date.split('-')[2]);
+      
       // Simple week calculation: Week of month (1-5)
-      const dayOfMonth = date.getDate();
       const weekNum = Math.ceil(dayOfMonth / 7);
       
       let weekGroup = weeklyData.find(w => w.week === weekNum);
@@ -103,6 +125,22 @@ export const ExpenseManager: React.FC<ExpenseManagerProps> = ({
     }
   };
 
+  const handleQuickAdd = () => {
+    if (quickDate && quickTitle && quickAmount) {
+      onAddExpense({
+        id: Date.now().toString(),
+        date: quickDate,
+        title: quickTitle,
+        amount: Number(quickAmount),
+        note: quickNote
+      });
+      setQuickTitle('');
+      setQuickAmount('');
+      setQuickNote('');
+      setShowQuickAdd(false);
+    }
+  };
+
   const openDay = (day: number) => {
     const date = new Date(currentDate.getFullYear(), currentDate.getMonth(), day);
     setSelectedDateStr(formatDate(date));
@@ -111,22 +149,35 @@ export const ExpenseManager: React.FC<ExpenseManagerProps> = ({
   // --- Render Calendar Grid ---
   const renderCalendar = () => {
     const daysInMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0).getDate();
-    const firstDay = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1).getDay();
+    
+    // Calculate first day index (Mon=0, ... Sun=6)
+    const getFirstDayIndex = () => {
+       const day = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1).getDay();
+       return day === 0 ? 6 : day - 1;
+    };
+    const firstDay = getFirstDayIndex();
 
     return (
       <div className="flex-1 flex flex-col overflow-hidden">
+        {/* Header T2 -> CN */}
         <div className="grid grid-cols-7 gap-1 text-center mb-2">
-          {['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'].map(d => (
-            <div key={d} className="text-xs font-bold text-gray-400 uppercase py-2">{d}</div>
+          {['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'].map(d => (
+            <div key={d} className={`text-xs font-bold uppercase py-2 ${d === 'CN' ? 'text-red-400' : 'text-gray-400'}`}>{d}</div>
           ))}
         </div>
+        
         <div className="grid grid-cols-7 gap-2 flex-1 auto-rows-fr overflow-y-auto p-1">
+          {/* Empty Cells */}
           {Array.from({ length: firstDay }).map((_, i) => <div key={`empty-${i}`} />)}
+          
+          {/* Days */}
           {Array.from({ length: daysInMonth }).map((_, i) => {
             const day = i + 1;
-            const dateStr = formatDate(new Date(currentDate.getFullYear(), currentDate.getMonth(), day));
+            const date = new Date(currentDate.getFullYear(), currentDate.getMonth(), day);
+            const dateStr = formatDate(date);
             const total = expensesByDate.get(dateStr) || 0;
             const isToday = formatDate(new Date()) === dateStr;
+            const isSunday = (firstDay + i) % 7 === 6;
 
             return (
               <button
@@ -136,10 +187,13 @@ export const ExpenseManager: React.FC<ExpenseManagerProps> = ({
                   aspect-square rounded-xl flex flex-col items-center justify-center relative shadow-sm border
                   ${isToday ? `${theme.borderDark} ${theme.bg}` : 'border-gray-100 bg-white'}
                   ${total > 0 && !isToday ? `${theme.border} ${theme.bg}/50` : ''}
+                  ${isSunday && !isToday && total === 0 ? 'bg-gray-50' : ''}
                   active:scale-95 transition-transform
                 `}
               >
-                <span className={`text-sm font-semibold ${isToday ? theme.text : 'text-gray-700'}`}>{day}</span>
+                <span className={`text-sm font-semibold ${isToday ? theme.text : (isSunday ? 'text-red-400' : 'text-gray-700')}`}>
+                    {day}
+                </span>
                 {total > 0 && (
                   <span className={`mt-1 text-[10px] ${theme.text} font-bold truncate w-full px-1`}>
                     {currencyFormatter(total).replace(/\D00$/, '')}
@@ -208,26 +262,102 @@ export const ExpenseManager: React.FC<ExpenseManagerProps> = ({
           <button onClick={nextMonth} className="p-2 hover:bg-gray-100 rounded-full"><ChevronRight /></button>
         </div>
 
-        {/* View Toggle */}
-        <div className="flex bg-gray-100 p-1 rounded-xl">
+        {/* View Toggle and Quick Add */}
+        <div className="flex gap-2">
+          <div className="flex bg-gray-100 p-1 rounded-xl flex-1">
+            <button 
+              onClick={() => setViewMode('calendar')}
+              className={`flex-1 py-2 text-sm font-bold rounded-lg flex items-center justify-center gap-2 transition-all ${
+                viewMode === 'calendar' ? `bg-white shadow ${theme.text}` : 'text-gray-500'
+              }`}
+            >
+              <CalIcon size={16} /> Lịch
+            </button>
+            <button 
+              onClick={() => setViewMode('stats')}
+              className={`flex-1 py-2 text-sm font-bold rounded-lg flex items-center justify-center gap-2 transition-all ${
+                viewMode === 'stats' ? `bg-white shadow ${theme.text}` : 'text-gray-500'
+              }`}
+            >
+              <BarChart3 size={16} /> Thống kê
+            </button>
+          </div>
+          
           <button 
-            onClick={() => setViewMode('calendar')}
-            className={`flex-1 py-2 text-sm font-bold rounded-lg flex items-center justify-center gap-2 transition-all ${
-              viewMode === 'calendar' ? `bg-white shadow ${theme.text}` : 'text-gray-500'
-            }`}
+             onClick={() => setShowQuickAdd(!showQuickAdd)}
+             className={`px-4 rounded-xl font-bold transition-all flex items-center justify-center shadow-sm border ${
+               showQuickAdd 
+                 ? `${theme.bgDark} text-white ${theme.borderDark}` 
+                 : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'
+             }`}
           >
-            <CalIcon size={16} /> Lịch chi
-          </button>
-          <button 
-            onClick={() => setViewMode('stats')}
-            className={`flex-1 py-2 text-sm font-bold rounded-lg flex items-center justify-center gap-2 transition-all ${
-              viewMode === 'stats' ? `bg-white shadow ${theme.text}` : 'text-gray-500'
-            }`}
-          >
-            <BarChart3 size={16} /> Thống kê
+            <Zap size={20} fill={showQuickAdd ? "currentColor" : "none"} />
           </button>
         </div>
       </div>
+
+      {/* Quick Entry Section */}
+      {showQuickAdd && (
+        <div className="mb-4 animate-fade-in bg-white p-4 rounded-xl border border-gray-200 shadow-lg relative z-10">
+          <div className="flex justify-between items-center mb-3">
+             <h3 className={`text-sm font-bold uppercase tracking-wider ${theme.text}`}>Thêm nhanh</h3>
+             <button onClick={() => setShowQuickAdd(false)} className="text-gray-400 hover:text-gray-600"><X size={16}/></button>
+          </div>
+          
+          <div className="space-y-3">
+             <div className="grid grid-cols-2 gap-3">
+                <div>
+                   <label className="text-[10px] font-bold text-gray-400 uppercase mb-1 block">Ngày</label>
+                   <input 
+                      type="date" 
+                      value={quickDate}
+                      onChange={e => setQuickDate(e.target.value)}
+                      className={`w-full p-2 text-sm rounded-lg border border-gray-300 focus:ring-1 outline-none ${theme.focusRing} ${theme.borderFocus}`}
+                   />
+                </div>
+                <div>
+                   <label className="text-[10px] font-bold text-gray-400 uppercase mb-1 block">Số tiền</label>
+                   <input 
+                      type="number" 
+                      placeholder="0"
+                      value={quickAmount}
+                      onChange={e => setQuickAmount(e.target.value)}
+                      className={`w-full p-2 text-sm rounded-lg border border-gray-300 focus:ring-1 outline-none font-bold ${theme.focusRing} ${theme.borderFocus}`}
+                   />
+                </div>
+             </div>
+             
+             <div>
+                <label className="text-[10px] font-bold text-gray-400 uppercase mb-1 block">Nội dung</label>
+                <input 
+                   type="text" 
+                   placeholder="Vd: Ăn sáng, Xăng xe..."
+                   value={quickTitle}
+                   onChange={e => setQuickTitle(e.target.value)}
+                   className={`w-full p-2 text-sm rounded-lg border border-gray-300 focus:ring-1 outline-none ${theme.focusRing} ${theme.borderFocus}`}
+                />
+             </div>
+             
+             <div>
+                <input 
+                   type="text" 
+                   placeholder="Ghi chú (tùy chọn)..."
+                   value={quickNote}
+                   onChange={e => setQuickNote(e.target.value)}
+                   className={`w-full p-2 text-xs rounded-lg border border-gray-200 focus:ring-1 outline-none text-gray-600 ${theme.focusRing} ${theme.borderFocus}`}
+                />
+             </div>
+
+             <button 
+               onClick={handleQuickAdd}
+               disabled={!quickTitle || !quickAmount || !quickDate}
+               className={`w-full text-white py-2.5 rounded-xl font-bold disabled:opacity-50 flex items-center justify-center gap-2 mt-2 shadow-md ${theme.bgDark} ${theme.bgDarkHover}`}
+             >
+               <Plus size={18} /> Lưu chi tiêu
+             </button>
+          </div>
+        </div>
+      )}
 
       {/* Main Content */}
       {viewMode === 'calendar' ? renderCalendar() : renderStats()}

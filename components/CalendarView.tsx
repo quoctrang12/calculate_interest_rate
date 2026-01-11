@@ -22,9 +22,12 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
   const [tempItems, setTempItems] = useState<Map<string, LunchItem>>(new Map());
   const [batchPrice, setBatchPrice] = useState<number>(defaultCost);
 
-  // Format date helper
+  // Format date helper (Fix: Sử dụng Local Time thay vì UTC để tránh lệch ngày)
   const formatDate = (date: Date) => {
-    return date.toISOString().split('T')[0];
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
   };
 
   const getDaysInMonth = (year: number, month: number) => {
@@ -32,7 +35,16 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
   };
 
   const daysInMonth = getDaysInMonth(currentDate.getFullYear(), currentDate.getMonth());
-  const firstDayOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1).getDay();
+  
+  // Tính toán ngày bắt đầu của tháng (0 = Thứ 2, ..., 6 = Chủ Nhật)
+  const getFirstDayIndex = () => {
+    const day = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1).getDay();
+    // getDay(): 0 là CN, 1 là T2...
+    // Muốn: 0 là T2, ... 6 là CN
+    return day === 0 ? 6 : day - 1;
+  };
+
+  const firstDayOfMonth = getFirstDayIndex();
 
   // Navigation
   const prevMonth = () => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1));
@@ -125,16 +137,20 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
         </button>
       </div>
 
-      {/* Grid */}
+      {/* Grid Header (T2 -> CN) */}
       <div className="grid grid-cols-7 gap-1 text-center mb-2">
-        {['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'].map(d => (
-          <div key={d} className="text-xs font-bold text-gray-400 uppercase py-2">{d}</div>
+        {['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'].map(d => (
+          <div key={d} className={`text-xs font-bold uppercase py-2 ${d === 'CN' ? 'text-red-400' : 'text-gray-400'}`}>{d}</div>
         ))}
       </div>
+
       <div className="grid grid-cols-7 gap-2 flex-1 auto-rows-fr overflow-y-auto">
+        {/* Render Empty Cells */}
         {Array.from({ length: firstDayOfMonth }).map((_, i) => (
           <div key={`empty-${i}`} />
         ))}
+        
+        {/* Render Days */}
         {Array.from({ length: daysInMonth }).map((_, i) => {
           const day = i + 1;
           const date = new Date(currentDate.getFullYear(), currentDate.getMonth(), day);
@@ -142,6 +158,9 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
           const record = getRecordForDate(dateStr);
           const isToday = formatDate(new Date()) === dateStr;
           const count = record ? record.items.length : 0;
+          
+          // Check if Sunday (Last column in grid)
+          const isSunday = (firstDayOfMonth + i) % 7 === 6;
 
           return (
             <button
@@ -151,10 +170,13 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                 aspect-square rounded-xl flex flex-col items-center justify-center relative shadow-sm border
                 ${isToday ? 'border-blue-500 bg-blue-50' : 'border-gray-100 bg-white'}
                 ${count > 0 ? 'bg-green-50 border-green-200' : ''}
+                ${isSunday && !isToday && count === 0 ? 'bg-gray-50' : ''}
                 active:scale-95 transition-transform
               `}
             >
-              <span className={`text-sm font-semibold ${isToday ? 'text-blue-600' : 'text-gray-700'}`}>{day}</span>
+              <span className={`text-sm font-semibold ${isToday ? 'text-blue-600' : (isSunday ? 'text-red-400' : 'text-gray-700')}`}>
+                {day}
+              </span>
               {count > 0 && (
                  <span className="mt-1 text-xs px-1.5 py-0.5 bg-green-200 text-green-800 rounded-full font-bold">
                    {count}
@@ -167,9 +189,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
 
       {/* Modal for Employee Selection & Detail */}
       {selectedDateStr && (
-         // FIX: Tăng Z-Index lên 100 để đảm bảo modal đè lên Navbar (z-40)
         <div className="fixed inset-0 bg-black/50 z-[100] flex items-end sm:items-center justify-center animate-fade-in">
-          {/* FIX: Sử dụng max-h dynamic để tránh tràn màn hình */}
           <div className="bg-white w-full sm:max-w-lg h-[90dvh] sm:h-[80vh] sm:rounded-2xl rounded-t-3xl shadow-2xl flex flex-col">
             <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-gray-50 rounded-t-3xl sm:rounded-t-2xl">
               <div>
@@ -266,7 +286,6 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
               {employees.length === 0 && <p className="text-center text-gray-400 mt-8">Chưa có nhân viên nào.</p>}
             </div>
 
-             {/* FIX: Thêm pb-safe-area để nút không bị dính đáy màn hình trên iPhone */}
             <div className="p-4 border-t border-gray-100 bg-white rounded-b-xl sm:rounded-b-2xl shadow-[0_-5px_10px_rgba(0,0,0,0.05)] pb-safe-area">
               <button
                 onClick={saveAndClose}
