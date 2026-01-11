@@ -5,12 +5,17 @@ import { EmployeeList } from './components/EmployeeList';
 import { PaymentScanner } from './components/PaymentScanner';
 import { StatsView } from './components/StatsView';
 import { ExpenseManager } from './components/ExpenseManager';
-import { Calendar, Users, ScanLine, Settings, PieChart, Wallet, Layers, Check, Download, Upload, Trash2, Database, AlertTriangle, Smartphone } from 'lucide-react';
+import { saveToCloud, loadFromCloud } from './services/cloudService';
+import { Calendar, Users, ScanLine, Settings, PieChart, Wallet, Layers, Check, Download, Upload, Trash2, Database, AlertTriangle, Smartphone, Cloud, RefreshCw } from 'lucide-react';
 
 export default function App() {
   // --- State ---
   const [activeTab, setActiveTab] = useState<Tab>(Tab.CALENDAR);
+  const [isLoadingCloud, setIsLoadingCloud] = useState(false);
   
+  // Initial Load Flag to prevent overwriting cloud data with empty local state on first mount
+  const [isInitialized, setIsInitialized] = useState(false);
+
   const [employees, setEmployees] = useState<Employee[]>(() => {
     const saved = localStorage.getItem('employees');
     return saved ? JSON.parse(saved) : [];
@@ -37,50 +42,83 @@ export default function App() {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // --- Effects ---
+  // --- Cloud Sync Effects ---
+  
+  // 1. Load from Cloud on Mount (Supabase)
   useEffect(() => {
+    const syncFromCloud = async () => {
+      // If we have API keys configured, try to fetch
+      if (process.env.VITE_SUPABASE_URL) {
+        setIsLoadingCloud(true);
+        try {
+          const [cloudEmps, cloudLunch, cloudExp, cloudSettings] = await Promise.all([
+            loadFromCloud('employees'),
+            loadFromCloud('lunchRecords'),
+            loadFromCloud('expenseRecords'),
+            loadFromCloud('settings')
+          ]);
+
+          if (cloudEmps) setEmployees(cloudEmps);
+          if (cloudLunch) setLunchRecords(cloudLunch);
+          if (cloudExp) setExpenseRecords(cloudExp);
+          if (cloudSettings) setSettings(cloudSettings);
+        } catch (e) {
+          console.error("Failed to load from cloud", e);
+        } finally {
+          setIsLoadingCloud(false);
+          setIsInitialized(true);
+        }
+      } else {
+        setIsInitialized(true);
+      }
+    };
+
+    syncFromCloud();
+  }, []);
+
+  // 2. Save to LocalStorage & Cloud on Change
+  useEffect(() => {
+    if (!isInitialized) return;
     localStorage.setItem('employees', JSON.stringify(employees));
-  }, [employees]);
+    saveToCloud('employees', employees);
+  }, [employees, isInitialized]);
 
   useEffect(() => {
+    if (!isInitialized) return;
     localStorage.setItem('lunchRecords', JSON.stringify(lunchRecords));
-  }, [lunchRecords]);
+    saveToCloud('lunchRecords', lunchRecords);
+  }, [lunchRecords, isInitialized]);
 
   useEffect(() => {
+    if (!isInitialized) return;
     localStorage.setItem('expenseRecords', JSON.stringify(expenseRecords));
-  }, [expenseRecords]);
+    saveToCloud('expenseRecords', expenseRecords);
+  }, [expenseRecords, isInitialized]);
 
   useEffect(() => {
+    if (!isInitialized) return;
     localStorage.setItem('settings', JSON.stringify(settings));
-  }, [settings]);
+    saveToCloud('settings', settings);
+  }, [settings, isInitialized]);
 
   // Capture PWA install prompt
   useEffect(() => {
     const handler = (e: any) => {
-      // Prevent the mini-infobar from appearing on mobile
       e.preventDefault();
-      // Stash the event so it can be triggered later.
       setDeferredPrompt(e);
     };
 
     window.addEventListener('beforeinstallprompt', handler);
-
-    return () => {
-      window.removeEventListener('beforeinstallprompt', handler);
-    };
+    return () => window.removeEventListener('beforeinstallprompt', handler);
   }, []);
 
   // --- Actions ---
 
   const handleInstallClick = async () => {
     if (!deferredPrompt) return;
-    // Show the install prompt
     deferredPrompt.prompt();
-    // Wait for the user to respond to the prompt
     const { outcome } = await deferredPrompt.userChoice;
-    // Optionally, send analytics event with outcome of user choice
     console.log(`User response to the install prompt: ${outcome}`);
-    // We've used the prompt, and can't use it again, throw it away
     setDeferredPrompt(null);
   };
 
@@ -102,25 +140,15 @@ export default function App() {
     
     setEmployees(currentEmps => currentEmps.map(emp => {
       let balanceChange = 0;
-      
-      // 1. Revert effect of previous record (Refund the money)
       if (prevRecord) {
         const oldItem = prevRecord.items.find(i => i.employeeId === emp.id);
-        if (oldItem) {
-          balanceChange += oldItem.price;
-        }
+        if (oldItem) balanceChange += oldItem.price;
       }
-
-      // 2. Apply effect of new record (Charge the money)
       const newItem = newItems.find(i => i.employeeId === emp.id);
-      if (newItem) {
-        balanceChange -= newItem.price;
-      }
-      
+      if (newItem) balanceChange -= newItem.price;
       return { ...emp, balance: emp.balance + balanceChange };
     }));
 
-    // Update records storage
     const otherRecords = lunchRecords.filter(r => r.date !== date);
     if (newItems.length > 0) {
       setLunchRecords([...otherRecords, { date, items: newItems }]);
@@ -135,7 +163,6 @@ export default function App() {
     ));
   };
 
-  // Manual adjustment (Manual debt subtraction or credit addition)
   const adjustBalance = (employeeId: string, amount: number) => {
     setEmployees(emps => emps.map(e => 
       e.id === employeeId ? { ...e, balance: e.balance + amount } : e
@@ -181,13 +208,10 @@ export default function App() {
       try {
         const content = e.target?.result as string;
         const data = JSON.parse(content);
-
-        // Basic validation
         if (!data.employees && !data.lunchRecords) {
            alert("File không hợp lệ!");
            return;
         }
-
         if (window.confirm("Hành động này sẽ ghi đè dữ liệu hiện tại bằng dữ liệu trong file. Bạn có chắc chắn không?")) {
           if (data.employees) setEmployees(data.employees);
           if (data.lunchRecords) setLunchRecords(data.lunchRecords);
@@ -199,19 +223,17 @@ export default function App() {
         alert("Lỗi khi đọc file backup. Vui lòng thử lại.");
         console.error(error);
       }
-      // Reset input
       if (fileInputRef.current) fileInputRef.current.value = '';
     };
     reader.readAsText(file);
   };
 
   const handleResetData = () => {
-    if (window.confirm("CẢNH BÁO: Tất cả dữ liệu (nhân viên, lịch sử, chi tiêu) sẽ bị xóa vĩnh viễn. Bạn có chắc chắn muốn xóa không?")) {
+    if (window.confirm("CẢNH BÁO: Tất cả dữ liệu sẽ bị xóa. Bạn có chắc chắn không?")) {
        setEmployees([]);
        setLunchRecords([]);
        setExpenseRecords([]);
        setSettings({ costPerMeal: 35000, expenseThemeColor: 'orange' });
-       alert("Đã xóa toàn bộ dữ liệu về trạng thái ban đầu.");
     }
   };
 
@@ -220,7 +242,6 @@ export default function App() {
     return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(val);
   };
 
-  // --- Theme Helper for Nav ---
   const getNavColor = (tabId: Tab) => {
     if (tabId !== Tab.EXPENSES) return null;
     const map: Record<string, {text: string, bg: string}> = {
@@ -236,13 +257,12 @@ export default function App() {
 
   const expenseNavStyle = getNavColor(Tab.EXPENSES) || { text: 'text-orange-500', bg: 'bg-orange-50' };
 
-  // --- Navigation Config ---
   const navItems = [
-    { id: Tab.CALENDAR, label: 'Ăn trưa', icon: Calendar, color: 'text-blue-600', activeColor: 'bg-blue-50' },
-    { id: Tab.EXPENSES, label: 'Quỹ chi', icon: Wallet, color: expenseNavStyle.text, activeColor: expenseNavStyle.bg },
-    { id: Tab.STATS, label: 'Thống kê', icon: PieChart, color: 'text-violet-600', activeColor: 'bg-violet-50' },
-    { id: Tab.SCANNER, label: 'AI Scan', icon: ScanLine, color: 'text-indigo-600', activeColor: 'bg-indigo-50' },
-    { id: Tab.EMPLOYEES, label: 'Nhân sự', icon: Users, color: 'text-teal-600', activeColor: 'bg-teal-50' },
+    { id: Tab.CALENDAR, label: 'Ăn trưa', icon: Calendar, color: 'text-blue-600' },
+    { id: Tab.EXPENSES, label: 'Quỹ chi', icon: Wallet, color: expenseNavStyle.text },
+    { id: Tab.STATS, label: 'Thống kê', icon: PieChart, color: 'text-violet-600' },
+    { id: Tab.SCANNER, label: 'AI Scan', icon: ScanLine, color: 'text-indigo-600' },
+    { id: Tab.EMPLOYEES, label: 'Nhân sự', icon: Users, color: 'text-teal-600' },
   ];
 
   const themeColors = [
@@ -258,14 +278,17 @@ export default function App() {
   return (
     <div className="bg-gray-50 h-screen w-full overflow-hidden flex flex-col font-sans text-gray-900">
       
-      {/* Modern Header */}
+      {/* Header */}
       <header className="bg-white/85 backdrop-blur-xl border-b border-gray-100 px-4 py-3 flex justify-between items-center z-50 sticky top-0 shadow-sm transition-all">
         <div className="flex items-center gap-3">
            <div className="bg-gradient-to-br from-blue-600 to-indigo-600 p-2 rounded-xl shadow-lg shadow-blue-200">
              <Layers size={20} className="text-white" />
            </div>
            <div>
-             <h1 className="text-lg font-bold text-gray-800 leading-none tracking-tight">TrangNQ Tools</h1>
+             <h1 className="text-lg font-bold text-gray-800 leading-none tracking-tight flex items-center gap-2">
+               TrangNQ Tools
+               {isLoadingCloud && <RefreshCw size={12} className="text-green-500 animate-spin" />}
+             </h1>
              <p className="text-[10px] font-medium text-gray-400 mt-1">Quản lý hiệu quả</p>
            </div>
         </div>
@@ -337,19 +360,15 @@ export default function App() {
 
           {activeTab === Tab.SETTINGS && (
             <div className="p-4 space-y-6 animate-fade-in pb-24">
-              {/* Install App Section (Only visible if installable) */}
               {deferredPrompt && (
                 <div className="bg-gradient-to-r from-purple-600 to-indigo-600 rounded-2xl shadow-lg p-5 text-white">
                   <h2 className="text-lg font-bold mb-2 flex items-center gap-2">
                     <Smartphone size={20} /> Cài đặt ứng dụng
                   </h2>
                   <p className="text-sm text-indigo-100 mb-4 opacity-90">
-                    Cài đặt ứng dụng vào màn hình chính để truy cập nhanh hơn và sử dụng toàn màn hình.
+                    Cài đặt ứng dụng vào màn hình chính để truy cập nhanh hơn.
                   </p>
-                  <button 
-                    onClick={handleInstallClick}
-                    className="w-full bg-white text-indigo-600 py-3 rounded-xl font-bold hover:bg-indigo-50 transition-colors shadow-md"
-                  >
+                  <button onClick={handleInstallClick} className="w-full bg-white text-indigo-600 py-3 rounded-xl font-bold hover:bg-indigo-50 transition-colors shadow-md">
                     Cài đặt ngay
                   </button>
                 </div>
@@ -360,7 +379,6 @@ export default function App() {
                  <h2 className="text-lg font-bold text-gray-800 mb-6 flex items-center gap-2 border-b border-gray-100 pb-2">
                   <Settings size={20} className="text-gray-500" /> Thiết lập hệ thống
                  </h2>
-                 
                  <div className="space-y-6">
                    <div>
                      <label className="block text-sm font-semibold text-gray-700 mb-2">Giá tiền mặc định / bữa</label>
@@ -374,7 +392,6 @@ export default function App() {
                        <span className="absolute left-4 top-4 text-gray-400 font-bold group-focus-within:text-indigo-500">₫</span>
                      </div>
                    </div>
-
                    <div>
                      <label className="block text-sm font-semibold text-gray-700 mb-3">Màu chủ đạo Quỹ chi</label>
                      <div className="flex flex-wrap gap-3">
@@ -389,7 +406,6 @@ export default function App() {
                         ))}
                      </div>
                    </div>
-
                  </div>
               </div>
 
@@ -400,37 +416,29 @@ export default function App() {
                  </h2>
                  
                  <div className="space-y-4">
-                   <p className="text-sm text-gray-500 leading-relaxed">
-                     Dữ liệu được lưu trên trình duyệt của thiết bị này. Hãy sao lưu thường xuyên để tránh mất dữ liệu khi xóa cache hoặc đổi máy.
-                   </p>
+                   <div className="bg-green-50 p-3 rounded-lg flex items-start gap-3">
+                      <Cloud size={20} className="text-green-500 mt-0.5 shrink-0" />
+                      <div>
+                        <p className="text-sm font-bold text-green-900">Đồng bộ Cloud (Supabase)</p>
+                        <p className="text-xs text-green-700 mt-1">
+                          {process.env.VITE_SUPABASE_URL ? 'Đã kết nối Supabase. Dữ liệu sẽ tự động lưu.' : 'Chưa cấu hình Supabase URL/Key. Dữ liệu chỉ lưu cục bộ.'}
+                        </p>
+                      </div>
+                   </div>
 
                    <div className="grid grid-cols-1 gap-3">
-                     <button 
-                       onClick={handleExportData}
-                       className="flex items-center justify-center gap-2 w-full p-4 bg-indigo-50 text-indigo-700 font-bold rounded-xl border border-indigo-100 hover:bg-indigo-100 transition-colors"
-                     >
+                     <button onClick={handleExportData} className="flex items-center justify-center gap-2 w-full p-4 bg-indigo-50 text-indigo-700 font-bold rounded-xl border border-indigo-100 hover:bg-indigo-100 transition-colors">
                        <Download size={18} /> Sao lưu dữ liệu (.json)
                      </button>
-                     
                      <div className="relative">
-                       <input 
-                         type="file" 
-                         accept=".json" 
-                         ref={fileInputRef}
-                         onChange={handleImportData}
-                         className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                       />
+                       <input type="file" accept=".json" ref={fileInputRef} onChange={handleImportData} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
                        <button className="flex items-center justify-center gap-2 w-full p-4 bg-gray-50 text-gray-700 font-bold rounded-xl border border-gray-200 hover:bg-gray-100 transition-colors pointer-events-none">
                          <Upload size={18} /> Khôi phục dữ liệu
                        </button>
                      </div>
-
                      <div className="pt-4 border-t border-gray-100 mt-2">
-                       <button 
-                         onClick={handleResetData}
-                         className="flex items-center justify-center gap-2 w-full p-4 bg-red-50 text-red-600 font-bold rounded-xl border border-red-100 hover:bg-red-100 transition-colors"
-                       >
-                         <Trash2 size={18} /> <span className="flex items-center gap-1">Xóa toàn bộ dữ liệu <AlertTriangle size={14} /></span>
+                       <button onClick={handleResetData} className="flex items-center justify-center gap-2 w-full p-4 bg-red-50 text-red-600 font-bold rounded-xl border border-red-100 hover:bg-red-100 transition-colors">
+                         <Trash2 size={18} /> <span className="flex items-center gap-1">Xóa toàn bộ <AlertTriangle size={14} /></span>
                        </button>
                      </div>
                    </div>
@@ -445,33 +453,22 @@ export default function App() {
         </div>
       </main>
 
-      {/* Modern Bottom Navigation */}
+      {/* Navigation */}
       <nav className="bg-white/90 backdrop-blur-md border-t border-gray-200 pb-safe-area shadow-[0_-8px_30px_rgba(0,0,0,0.04)] z-50">
         <div className="flex justify-around items-center h-[3.5rem] px-2">
           {navItems.map((item) => {
             const isActive = activeTab === item.id;
-            // Handle dynamic styling for expenses
-            // const activeLineClass = isActive ? `bg-${item.color.split('-')[1]}-500` : ''; 
-            // Note: The above specific split is risky if classes change, but since we control navItems color prop (text-blue-600), it maps to bg-blue-500 roughly. 
-            // However, item.color is e.g. 'text-orange-500'. Split gives 'orange'. 'bg-orange-500' works.
-
             return (
               <button 
                 key={item.id}
                 onClick={() => setActiveTab(item.id)}
                 className={`flex-1 flex flex-col items-center justify-center h-full relative group transition-all duration-200`}
               >
-                {/* Active Indicator Line */}
                 {isActive && (
                   <span className={`absolute top-0 w-8 h-0.5 rounded-b-full ${item.color.replace('text-', 'bg-').replace('600', '500')}`} />
                 )}
-                
                 <div className={`p-1.5 rounded-xl transition-all duration-300 ${isActive ? '' : 'bg-transparent'} ${isActive ? 'translate-y-[-2px]' : 'group-hover:bg-gray-50'}`}>
-                  <item.icon 
-                    size={24} 
-                    strokeWidth={isActive ? 2.5 : 2} 
-                    className={`transition-colors duration-200 ${isActive ? item.color : 'text-gray-400 group-hover:text-gray-500'}`} 
-                  />
+                  <item.icon size={24} strokeWidth={isActive ? 2.5 : 2} className={`transition-colors duration-200 ${isActive ? item.color : 'text-gray-400 group-hover:text-gray-500'}`} />
                 </div>
                 <span className={`text-[10px] font-bold mt-0.5 transition-colors duration-200 ${isActive ? item.color : 'text-gray-400'}`}>
                   {item.label}

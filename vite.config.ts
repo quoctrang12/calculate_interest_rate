@@ -39,6 +39,8 @@ export default defineConfig(({ mode }) => {
     define: {
       // Polyfill process.env.API_KEY for the GenAI SDK
       'process.env.API_KEY': JSON.stringify(env.VITE_GEMINI_API_KEY || env.API_KEY || ''),
+      'process.env.VITE_SUPABASE_URL': JSON.stringify(env.VITE_SUPABASE_URL || ''),
+      'process.env.VITE_SUPABASE_KEY': JSON.stringify(env.VITE_SUPABASE_KEY || ''),
     }
   }
 })
