@@ -20,8 +20,11 @@ export const StatsView: React.FC<StatsViewProps> = ({
   
   // Calculate stats
   const stats = useMemo(() => {
+    const year = currentDate.getFullYear();
+    const month = currentDate.getMonth(); // 0-indexed
+    
     // Format: YYYY-MM
-    const monthKey = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}`;
+    const monthKey = `${year}-${String(month + 1).padStart(2, '0')}`;
     
     // Filter records for selected month
     const monthlyRecords = lunchRecords.filter(r => r.date.startsWith(monthKey));
@@ -49,37 +52,57 @@ export const StatsView: React.FC<StatsViewProps> = ({
     empStats.sort((a, b) => b.totalMealCost - a.totalMealCost);
 
 
-    // -- Weekly Breakdown Stats --
-    // Structure: Array of Weeks -> Array of Employee Spending in that week
-    const weeklyData: { week: number; start: string; end: string; employeeSpending: Record<string, number> }[] = [];
+    // -- Weekly Breakdown Stats (T2 -> CN) --
     
-    monthlyRecords.forEach(record => {
-      const d = new Date(record.date);
-      // Determine week number (1-5ish) within the month
-      const day = d.getDate();
-      const weekNum = Math.ceil(day / 7);
-
-      let weekEntry = weeklyData.find(w => w.week === weekNum);
-      if (!weekEntry) {
-         weekEntry = { 
-           week: weekNum, 
-           start: `${weekNum * 7 - 6}/${d.getMonth() + 1}`,
-           end: `${Math.min(weekNum * 7, new Date(d.getFullYear(), d.getMonth()+1, 0).getDate())}/${d.getMonth() + 1}`,
-           employeeSpending: {} 
-         };
-         weeklyData.push(weekEntry);
-      }
-
-      record.items.forEach(item => {
-        if (!weekEntry!.employeeSpending[item.employeeId]) {
-          weekEntry!.employeeSpending[item.employeeId] = 0;
+    // 1. Tạo danh sách các tuần trong tháng dựa trên lịch thực tế (T2 - CN)
+    const weeksInMonth: { id: number; start: number; end: number; label: string }[] = [];
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    
+    let currentWeekStart = 1;
+    let weekIndex = 1;
+    
+    for (let d = 1; d <= daysInMonth; d++) {
+        const dateObj = new Date(year, month, d);
+        const dayOfWeek = dateObj.getDay(); // 0 = CN, 1 = T2...
+        
+        // Kết thúc tuần nếu là Chủ Nhật hoặc ngày cuối cùng của tháng
+        if (dayOfWeek === 0 || d === daysInMonth) {
+            weeksInMonth.push({
+                id: weekIndex,
+                start: currentWeekStart,
+                end: d,
+                // Sử dụng month + 1 để hiển thị đúng tháng hiện tại, tránh dùng dateObj của record có thể bị sai
+                label: `${currentWeekStart}/${month + 1} - ${d}/${month + 1}`
+            });
+            currentWeekStart = d + 1;
+            weekIndex++;
         }
-        weekEntry!.employeeSpending[item.employeeId] += item.price;
-      });
-    });
+    }
 
-    // Sort weeks
-    weeklyData.sort((a, b) => a.week - b.week);
+    // 2. Map dữ liệu chi tiêu vào các tuần đã tạo
+    const weeklyData = weeksInMonth.map(week => {
+         const employeeSpending: Record<string, number> = {};
+         let hasData = false;
+         
+         monthlyRecords.forEach(r => {
+             // Parse ngày trực tiếp từ chuỗi YYYY-MM-DD để tránh lỗi múi giờ
+             const day = parseInt(r.date.split('-')[2]);
+             
+             if (day >= week.start && day <= week.end) {
+                 r.items.forEach(item => {
+                     employeeSpending[item.employeeId] = (employeeSpending[item.employeeId] || 0) + item.price;
+                     hasData = true;
+                 });
+             }
+         });
+
+         return {
+             week: week.id,
+             label: week.label,
+             employeeSpending,
+             hasData
+         };
+    }).filter(w => w.hasData); // Chỉ hiện tuần nào có dữ liệu chi tiêu
 
     return { totalSpentMonth, empStats, weeklyData };
   }, [employees, lunchRecords, currentDate]);
@@ -117,9 +140,9 @@ export const StatsView: React.FC<StatsViewProps> = ({
         {stats.weeklyData.length === 0 && <p className="text-gray-400 italic text-sm">Chưa có dữ liệu tuần.</p>}
         
         {stats.weeklyData.map(week => (
-           <div key={week.week} className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+           <div key={week.week} className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
               <div className="bg-gray-50 px-4 py-2 border-b border-gray-100 flex justify-between items-center">
-                 <span className="font-bold text-gray-700">Tuần {week.week} ({week.start} - {week.end})</span>
+                 <span className="font-bold text-gray-700">Tuần {week.week} ({week.label})</span>
               </div>
               <div className="p-2 divide-y divide-gray-100">
                  {Object.entries(week.employeeSpending)
