@@ -48,6 +48,7 @@ export default function App() {
   useEffect(() => {
     const syncFromCloud = async () => {
       // If we have API keys configured, try to fetch
+      console.log(process.env.VITE_SUPABASE_URL);
       if (process.env.VITE_SUPABASE_URL) {
         setIsLoadingCloud(true);
         try {
