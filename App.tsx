@@ -192,7 +192,6 @@ export default function App() {
   const handleInstallClick = async () => {
     if (!deferredPrompt) return;
     deferredPrompt.prompt();
-    const { outcome } = await deferredPrompt.userChoice;
     setDeferredPrompt(null);
   };
 
