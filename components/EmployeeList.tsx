@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Employee } from '../types';
-import { Trash2, UserPlus, Wallet, Edit3, X, ArrowUpRight, ArrowDownLeft } from 'lucide-react';
+import { Trash2, UserPlus, Wallet, Edit3, X, ArrowUpRight, ArrowDownLeft, Lock } from 'lucide-react';
 
 interface EmployeeListProps {
   employees: Employee[];
@@ -8,6 +8,7 @@ interface EmployeeListProps {
   onRemoveEmployee: (id: string) => void;
   onAdjustBalance: (id: string, amount: number) => void;
   currencyFormatter: (val: number) => string;
+  readOnly?: boolean;
 }
 
 export const EmployeeList: React.FC<EmployeeListProps> = ({ 
@@ -15,7 +16,8 @@ export const EmployeeList: React.FC<EmployeeListProps> = ({
   onAddEmployee, 
   onRemoveEmployee,
   onAdjustBalance,
-  currencyFormatter
+  currencyFormatter,
+  readOnly = false
 }) => {
   const [newName, setNewName] = useState('');
   
@@ -45,29 +47,36 @@ export const EmployeeList: React.FC<EmployeeListProps> = ({
 
   return (
     <div className="p-4 space-y-6 pb-24">
-      {/* Add Employee Form */}
-      <div className="bg-white rounded-xl shadow-sm p-4 border border-gray-100">
-        <h2 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
-          <UserPlus size={20} className="text-blue-600" />
-          Thêm nhân viên
-        </h2>
-        <form onSubmit={handleSubmit} className="flex gap-2">
-          <input
-            type="text"
-            value={newName}
-            onChange={(e) => setNewName(e.target.value)}
-            placeholder="Nhập tên nhân viên..."
-            className="flex-1 p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
-          <button
-            type="submit"
-            disabled={!newName.trim()}
-            className="bg-blue-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors"
-          >
-            Thêm
-          </button>
-        </form>
-      </div>
+      {/* Add Employee Form - Hide if ReadOnly */}
+      {!readOnly ? (
+        <div className="bg-white rounded-xl shadow-sm p-4 border border-gray-100">
+          <h2 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
+            <UserPlus size={20} className="text-blue-600" />
+            Thêm nhân viên
+          </h2>
+          <form onSubmit={handleSubmit} className="flex gap-2">
+            <input
+              type="text"
+              value={newName}
+              onChange={(e) => setNewName(e.target.value)}
+              placeholder="Nhập tên nhân viên..."
+              className="flex-1 p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            <button
+              type="submit"
+              disabled={!newName.trim()}
+              className="bg-blue-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors"
+            >
+              Thêm
+            </button>
+          </form>
+        </div>
+      ) : (
+        <div className="bg-blue-50 text-blue-800 p-3 rounded-xl flex items-center gap-2 text-sm font-medium">
+            <Lock size={16} />
+            Đang ở chế độ xem. Đăng nhập để chỉnh sửa.
+        </div>
+      )}
 
       {/* List */}
       <div className="space-y-3">
@@ -86,23 +95,27 @@ export const EmployeeList: React.FC<EmployeeListProps> = ({
                   </span>
                 </div>
               </div>
-              <div className="flex items-center gap-1">
-                 <button
-                  onClick={() => setSelectedEmp(emp)}
-                  className="p-2 bg-gray-50 text-blue-600 rounded-lg hover:bg-blue-50 transition-colors"
-                  title="Điều chỉnh số dư"
-                >
-                  <Edit3 size={18} />
-                </button>
-                <button
-                  onClick={() => {
-                     if(window.confirm(`Xóa nhân viên ${emp.name}?`)) onRemoveEmployee(emp.id);
-                  }}
-                  className="p-2 text-gray-400 hover:text-red-500 transition-colors"
-                >
-                  <Trash2 size={18} />
-                </button>
-              </div>
+              
+              {/* Actions - Show only if NOT ReadOnly */}
+              {!readOnly && (
+                <div className="flex items-center gap-1">
+                   <button
+                    onClick={() => setSelectedEmp(emp)}
+                    className="p-2 bg-gray-50 text-blue-600 rounded-lg hover:bg-blue-50 transition-colors"
+                    title="Điều chỉnh số dư"
+                  >
+                    <Edit3 size={18} />
+                  </button>
+                  <button
+                    onClick={() => {
+                       if(window.confirm(`Xóa nhân viên ${emp.name}?`)) onRemoveEmployee(emp.id);
+                    }}
+                    className="p-2 text-gray-400 hover:text-red-500 transition-colors"
+                  >
+                    <Trash2 size={18} />
+                  </button>
+                </div>
+              )}
             </div>
           ))
         )}

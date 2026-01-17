@@ -35,11 +35,19 @@ export interface PaymentExtractionResult {
   confidence: string;
 }
 
+export interface SystemLog {
+  id: string;
+  timestamp: string;
+  action: string;
+  details: string;
+}
+
 export enum Tab {
   CALENDAR = 'calendar',
   STATS = 'stats',
-  EXPENSES = 'expenses', // New Tab
+  EXPENSES = 'expenses',
   EMPLOYEES = 'employees',
   SCANNER = 'scanner',
+  LOGS = 'logs',
   SETTINGS = 'settings'
 }

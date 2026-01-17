@@ -1,17 +1,19 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Employee, LunchRecord, LunchItem, AppSettings, Tab, ExpenseRecord } from './types';
+import { Employee, LunchRecord, LunchItem, AppSettings, Tab, ExpenseRecord, SystemLog } from './types';
 import { CalendarView } from './components/CalendarView';
 import { EmployeeList } from './components/EmployeeList';
 import { PaymentScanner } from './components/PaymentScanner';
 import { StatsView } from './components/StatsView';
 import { ExpenseManager } from './components/ExpenseManager';
+import { LogViewer } from './components/LogViewer';
 import { saveToCloud, loadFromCloud } from './services/cloudService';
-import { Calendar, Users, ScanLine, Settings, PieChart, Wallet, Layers, Check, Download, Upload, Trash2, Database, AlertTriangle, Smartphone, Cloud, RefreshCw } from 'lucide-react';
+import { Calendar, Users, ScanLine, Settings, PieChart, Wallet, Layers, Check, Download, Upload, Trash2, Database, AlertTriangle, Smartphone, Cloud, RefreshCw, Lock, Unlock, History } from 'lucide-react';
 
 export default function App() {
   // --- State ---
   const [activeTab, setActiveTab] = useState<Tab>(Tab.CALENDAR);
   const [isLoadingCloud, setIsLoadingCloud] = useState(false);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
   
   // Initial Load Flag to prevent overwriting cloud data with empty local state on first mount
   const [isInitialized, setIsInitialized] = useState(false);
@@ -37,10 +39,30 @@ export default function App() {
     return saved ? { ...defaultSettings, ...JSON.parse(saved) } : defaultSettings;
   });
 
+  const [logs, setLogs] = useState<SystemLog[]>(() => {
+    const saved = localStorage.getItem('logs');
+    return saved ? JSON.parse(saved) : [];
+  });
+
   // PWA Install Prompt State
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // --- Helpers ---
+  const addLog = (action: string, details: string) => {
+    const newLog: SystemLog = {
+      id: Date.now().toString() + Math.random().toString().slice(2, 6),
+      timestamp: new Date().toISOString(),
+      action,
+      details
+    };
+    setLogs(prev => [newLog, ...prev]);
+  };
+
+  const formatCurrency = (val: number) => {
+    return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(val);
+  };
 
   // --- Cloud Sync Effects ---
   
@@ -48,21 +70,22 @@ export default function App() {
   useEffect(() => {
     const syncFromCloud = async () => {
       // If we have API keys configured, try to fetch
-      console.log(process.env.VITE_SUPABASE_URL);
       if (process.env.VITE_SUPABASE_URL) {
         setIsLoadingCloud(true);
         try {
-          const [cloudEmps, cloudLunch, cloudExp, cloudSettings] = await Promise.all([
+          const [cloudEmps, cloudLunch, cloudExp, cloudSettings, cloudLogs] = await Promise.all([
             loadFromCloud('employees'),
             loadFromCloud('lunchRecords'),
             loadFromCloud('expenseRecords'),
-            loadFromCloud('settings')
+            loadFromCloud('settings'),
+            loadFromCloud('logs')
           ]);
 
           if (cloudEmps) setEmployees(cloudEmps);
           if (cloudLunch) setLunchRecords(cloudLunch);
           if (cloudExp) setExpenseRecords(cloudExp);
           if (cloudSettings) setSettings(cloudSettings);
+          if (cloudLogs) setLogs(cloudLogs);
         } catch (e) {
           console.error("Failed to load from cloud", e);
         } finally {
@@ -102,6 +125,12 @@ export default function App() {
     saveToCloud('settings', settings);
   }, [settings, isInitialized]);
 
+  useEffect(() => {
+    if (!isInitialized) return;
+    localStorage.setItem('logs', JSON.stringify(logs));
+    saveToCloud('logs', logs);
+  }, [logs, isInitialized]);
+
   // Capture PWA install prompt
   useEffect(() => {
     const handler = (e: any) => {
@@ -112,6 +141,24 @@ export default function App() {
     window.addEventListener('beforeinstallprompt', handler);
     return () => window.removeEventListener('beforeinstallprompt', handler);
   }, []);
+
+  // --- Login Logic ---
+  const handleLoginToggle = () => {
+      if (isLoggedIn) {
+          if (window.confirm("Bạn có chắc chắn muốn đăng xuất?")) {
+              setIsLoggedIn(false);
+              setActiveTab(Tab.CALENDAR); // Reset to safe tab
+          }
+      } else {
+          const password = prompt("Nhập mật khẩu quản trị:", "");
+          if (password === "123456") {
+              setIsLoggedIn(true);
+              alert("Đăng nhập thành công!");
+          } else if (password !== null) {
+              alert("Sai mật khẩu!");
+          }
+      }
+  };
 
   // --- Actions ---
 
@@ -124,21 +171,31 @@ export default function App() {
   };
 
   const addEmployee = (name: string) => {
+    if (!isLoggedIn) return;
     const newEmp: Employee = {
       id: Date.now().toString(),
       name,
       balance: 0
     };
     setEmployees([...employees, newEmp]);
+    addLog('Thêm nhân viên', `Thêm nhân viên mới: ${name}`);
   };
 
   const removeEmployee = (id: string) => {
+    if (!isLoggedIn) return;
+    const emp = employees.find(e => e.id === id);
     setEmployees(employees.filter(e => e.id !== id));
+    addLog('Xóa nhân viên', `Đã xóa nhân viên: ${emp?.name || id}`);
   };
 
   const updateLunchRecord = (date: string, newItems: LunchItem[]) => {
+    if (!isLoggedIn) return;
     const prevRecord = lunchRecords.find(r => r.date === date);
     
+    // Log details
+    const count = newItems.length;
+    const names = newItems.map(i => employees.find(e => e.id === i.employeeId)?.name).join(', ');
+
     setEmployees(currentEmps => currentEmps.map(emp => {
       let balanceChange = 0;
       if (prevRecord) {
@@ -156,26 +213,39 @@ export default function App() {
     } else {
       setLunchRecords(otherRecords);
     }
+    
+    addLog('Cập nhật lịch ăn', `Ngày ${date}: ${count} người (${names})`);
   };
 
   const processPayment = (employeeId: string, amount: number) => {
+    if (!isLoggedIn) return;
+    const emp = employees.find(e => e.id === employeeId);
     setEmployees(emps => emps.map(e => 
       e.id === employeeId ? { ...e, balance: e.balance + amount } : e
     ));
+    addLog('AI Scanner', `Cập nhật số dư cho ${emp?.name}: +${formatCurrency(amount)}`);
   };
 
   const adjustBalance = (employeeId: string, amount: number) => {
+    if (!isLoggedIn) return;
+    const emp = employees.find(e => e.id === employeeId);
     setEmployees(emps => emps.map(e => 
       e.id === employeeId ? { ...e, balance: e.balance + amount } : e
     ));
+    addLog('Điều chỉnh số dư', `${amount > 0 ? 'Nạp' : 'Trừ'} tiền ${emp?.name}: ${formatCurrency(Math.abs(amount))}`);
   };
 
   const addExpense = (expense: ExpenseRecord) => {
+    if (!isLoggedIn) return;
     setExpenseRecords([...expenseRecords, expense]);
+    addLog('Thêm chi tiêu', `Chi: ${expense.title} - ${formatCurrency(expense.amount)}`);
   };
 
   const removeExpense = (id: string) => {
+    if (!isLoggedIn) return;
+    const exp = expenseRecords.find(e => e.id === id);
     setExpenseRecords(expenseRecords.filter(e => e.id !== id));
+    addLog('Xóa chi tiêu', `Xóa khoản chi: ${exp?.title}`);
   };
 
   // --- Data Management Actions ---
@@ -186,7 +256,8 @@ export default function App() {
       employees,
       lunchRecords,
       expenseRecords,
-      settings
+      settings,
+      logs
     };
     
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
@@ -198,9 +269,14 @@ export default function App() {
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
+    addLog('Sao lưu dữ liệu', 'Đã tải xuống file backup');
   };
 
   const handleImportData = (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (!isLoggedIn) {
+        alert("Vui lòng đăng nhập để khôi phục dữ liệu.");
+        return;
+    }
     const file = event.target.files?.[0];
     if (!file) return;
 
@@ -218,7 +294,9 @@ export default function App() {
           if (data.lunchRecords) setLunchRecords(data.lunchRecords);
           if (data.expenseRecords) setExpenseRecords(data.expenseRecords);
           if (data.settings) setSettings(data.settings);
+          if (data.logs) setLogs(data.logs);
           alert("Khôi phục dữ liệu thành công!");
+          addLog('Khôi phục dữ liệu', 'Đã khôi phục từ file backup');
         }
       } catch (error) {
         alert("Lỗi khi đọc file backup. Vui lòng thử lại.");
@@ -230,17 +308,15 @@ export default function App() {
   };
 
   const handleResetData = () => {
+    if (!isLoggedIn) return;
     if (window.confirm("CẢNH BÁO: Tất cả dữ liệu sẽ bị xóa. Bạn có chắc chắn không?")) {
        setEmployees([]);
        setLunchRecords([]);
        setExpenseRecords([]);
+       setLogs([]);
        setSettings({ costPerMeal: 35000, expenseThemeColor: 'orange' });
+       addLog('Reset hệ thống', 'Đã xóa toàn bộ dữ liệu');
     }
-  };
-
-  // --- Helpers ---
-  const formatCurrency = (val: number) => {
-    return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(val);
   };
 
   const getNavColor = (tabId: Tab) => {
@@ -266,6 +342,10 @@ export default function App() {
     { id: Tab.EMPLOYEES, label: 'Nhân sự', icon: Users, color: 'text-teal-600' },
   ];
 
+  if (isLoggedIn) {
+      navItems.push({ id: Tab.LOGS, label: 'Logs', icon: History, color: 'text-gray-600' });
+  }
+
   const themeColors = [
     { id: 'orange', class: 'bg-orange-500' },
     { id: 'blue', class: 'bg-blue-500' },
@@ -277,7 +357,7 @@ export default function App() {
 
   // --- Render ---
   return (
-        // FIX: Sử dụng h-[100dvh] để đảm bảo full chiều cao màn hình thiết bị, loại bỏ fixed inset-0 gây lỗi
+    // FIX: Sử dụng h-[100dvh] để đảm bảo full chiều cao màn hình thiết bị, loại bỏ fixed inset-0 gây lỗi
     <div className="bg-gray-50 h-[100dvh] w-full overflow-hidden flex flex-col font-sans text-gray-900 relative">
       
       {/* Header */}
@@ -294,12 +374,20 @@ export default function App() {
              <p className="text-[10px] font-medium text-gray-400 mt-1">Quản lý hiệu quả</p>
            </div>
         </div>
-        <button 
-          onClick={() => setActiveTab(Tab.SETTINGS)}
-          className={`p-2.5 rounded-full transition-all duration-300 ${activeTab === Tab.SETTINGS ? 'bg-gray-100 text-indigo-600 rotate-90' : 'text-gray-400 hover:bg-gray-50 hover:text-gray-600'}`}
-        >
-          <Settings size={22} strokeWidth={2} />
-        </button>
+        <div className="flex gap-2">
+            <button 
+                onClick={handleLoginToggle}
+                className={`p-2.5 rounded-full transition-all duration-300 ${isLoggedIn ? 'bg-green-100 text-green-600' : 'bg-gray-100 text-gray-500'}`}
+            >
+                {isLoggedIn ? <Unlock size={22} strokeWidth={2} /> : <Lock size={22} strokeWidth={2} />}
+            </button>
+            <button 
+                onClick={() => setActiveTab(Tab.SETTINGS)}
+                className={`p-2.5 rounded-full transition-all duration-300 ${activeTab === Tab.SETTINGS ? 'bg-gray-100 text-indigo-600 rotate-90' : 'text-gray-400 hover:bg-gray-50 hover:text-gray-600'}`}
+            >
+                <Settings size={22} strokeWidth={2} />
+            </button>
+        </div>
       </header>
 
       {/* Main Content */}
@@ -311,19 +399,21 @@ export default function App() {
                 employees={employees} 
                 lunchRecords={lunchRecords} 
                 defaultCost={settings.costPerMeal}
-                onSaveLunch={updateLunchRecord} 
+                onSaveLunch={updateLunchRecord}
+                readOnly={!isLoggedIn} 
               />
             </div>
           )}
 
           {activeTab === Tab.EXPENSES && (
-            <div className="animate-fade-in">
+            <div className="animate-fade-in h-full">
               <ExpenseManager
                 expenses={expenseRecords}
                 onAddExpense={addExpense}
                 onRemoveExpense={removeExpense}
                 currencyFormatter={formatCurrency}
                 themeColor={settings.expenseThemeColor}
+                readOnly={!isLoggedIn}
               />
             </div>
           )}
@@ -346,6 +436,7 @@ export default function App() {
                 onRemoveEmployee={removeEmployee}
                 onAdjustBalance={adjustBalance}
                 currencyFormatter={formatCurrency}
+                readOnly={!isLoggedIn}
               />
             </div>
           )}
@@ -356,8 +447,15 @@ export default function App() {
                 employees={employees}
                 onConfirmPayment={processPayment}
                 currencyFormatter={formatCurrency}
+                readOnly={!isLoggedIn}
               />
             </div>
+          )}
+
+          {activeTab === Tab.LOGS && isLoggedIn && (
+              <div className="animate-fade-in h-full">
+                  <LogViewer logs={logs} />
+              </div>
           )}
 
           {activeTab === Tab.SETTINGS && (
@@ -388,8 +486,9 @@ export default function App() {
                        <input 
                           type="number" 
                           value={settings.costPerMeal}
+                          disabled={!isLoggedIn}
                           onChange={(e) => setSettings({ ...settings, costPerMeal: Number(e.target.value) })}
-                          className="w-full p-4 pl-12 bg-gray-50 border border-gray-200 rounded-xl focus:bg-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 transition-all outline-none font-bold text-gray-800"
+                          className="w-full p-4 pl-12 bg-gray-50 border border-gray-200 rounded-xl focus:bg-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 transition-all outline-none font-bold text-gray-800 disabled:opacity-50"
                        />
                        <span className="absolute left-4 top-4 text-gray-400 font-bold group-focus-within:text-indigo-500">₫</span>
                      </div>
@@ -400,8 +499,9 @@ export default function App() {
                         {themeColors.map((t) => (
                           <button
                             key={t.id}
+                            disabled={!isLoggedIn}
                             onClick={() => setSettings({ ...settings, expenseThemeColor: t.id })}
-                            className={`w-10 h-10 rounded-full ${t.class} flex items-center justify-center transition-transform hover:scale-110 shadow-sm ${settings.expenseThemeColor === t.id ? 'ring-2 ring-offset-2 ring-gray-400 scale-110' : 'opacity-80 hover:opacity-100'}`}
+                            className={`w-10 h-10 rounded-full ${t.class} flex items-center justify-center transition-transform hover:scale-110 shadow-sm ${settings.expenseThemeColor === t.id ? 'ring-2 ring-offset-2 ring-gray-400 scale-110' : 'opacity-80 hover:opacity-100'} disabled:opacity-30`}
                           >
                              {settings.expenseThemeColor === t.id && <Check size={16} className="text-white font-bold" />}
                           </button>
@@ -433,13 +533,13 @@ export default function App() {
                        <Download size={18} /> Sao lưu dữ liệu (.json)
                      </button>
                      <div className="relative">
-                       <input type="file" accept=".json" ref={fileInputRef} onChange={handleImportData} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
-                       <button className="flex items-center justify-center gap-2 w-full p-4 bg-gray-50 text-gray-700 font-bold rounded-xl border border-gray-200 hover:bg-gray-100 transition-colors pointer-events-none">
+                       <input type="file" accept=".json" ref={fileInputRef} onChange={handleImportData} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" disabled={!isLoggedIn} />
+                       <button className={`flex items-center justify-center gap-2 w-full p-4 bg-gray-50 text-gray-700 font-bold rounded-xl border border-gray-200 hover:bg-gray-100 transition-colors pointer-events-none ${!isLoggedIn ? 'opacity-50' : ''}`}>
                          <Upload size={18} /> Khôi phục dữ liệu
                        </button>
                      </div>
                      <div className="pt-4 border-t border-gray-100 mt-2">
-                       <button onClick={handleResetData} className="flex items-center justify-center gap-2 w-full p-4 bg-red-50 text-red-600 font-bold rounded-xl border border-red-100 hover:bg-red-100 transition-colors">
+                       <button onClick={handleResetData} disabled={!isLoggedIn} className="flex items-center justify-center gap-2 w-full p-4 bg-red-50 text-red-600 font-bold rounded-xl border border-red-100 hover:bg-red-100 transition-colors disabled:opacity-50">
                          <Trash2 size={18} /> <span className="flex items-center gap-1">Xóa toàn bộ <AlertTriangle size={14} /></span>
                        </button>
                      </div>
@@ -448,7 +548,7 @@ export default function App() {
               </div>
               
               <div className="text-center pb-8">
-                 <p className="text-xs font-semibold text-gray-300 uppercase tracking-widest">TrangNQ Tools v1.3.1</p>
+                 <p className="text-xs font-semibold text-gray-300 uppercase tracking-widest">TrangNQ Tools v1.4.0</p>
               </div>
             </div>
           )}

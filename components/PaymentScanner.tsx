@@ -1,18 +1,20 @@
 import React, { useState } from 'react';
 import { parsePaymentNotification } from '../services/geminiService';
 import { Employee } from '../types';
-import { ScanLine, CheckCircle, AlertCircle, Loader2, ShieldCheck } from 'lucide-react';
+import { ScanLine, CheckCircle, AlertCircle, Loader2, ShieldCheck, Lock } from 'lucide-react';
 
 interface PaymentScannerProps {
   employees: Employee[];
   onConfirmPayment: (employeeId: string, amount: number) => void;
   currencyFormatter: (val: number) => string;
+  readOnly?: boolean;
 }
 
 export const PaymentScanner: React.FC<PaymentScannerProps> = ({ 
   employees, 
   onConfirmPayment,
-  currencyFormatter
+  currencyFormatter,
+  readOnly = false
 }) => {
   const [inputObj, setInputObj] = useState('');
   const [loading, setLoading] = useState(false);
@@ -25,7 +27,7 @@ export const PaymentScanner: React.FC<PaymentScannerProps> = ({
   const [autoSuccess, setAutoSuccess] = useState(false);
 
   const handleScan = async () => {
-    if (!inputObj.trim()) return;
+    if (!inputObj.trim() || readOnly) return;
     setLoading(true);
     setError(null);
     setResult(null);
@@ -72,18 +74,29 @@ export const PaymentScanner: React.FC<PaymentScannerProps> = ({
         </p>
       </div>
 
-      <div className="bg-white rounded-xl shadow-sm p-4 border border-gray-100">
+      <div className="bg-white rounded-xl shadow-sm p-4 border border-gray-100 relative overflow-hidden">
+        {readOnly && (
+           <div className="absolute inset-0 bg-white/80 backdrop-blur-sm z-10 flex flex-col items-center justify-center text-center p-6">
+              <div className="bg-gray-100 p-3 rounded-full mb-3">
+                 <Lock className="text-gray-500" size={32} />
+              </div>
+              <h3 className="text-lg font-bold text-gray-800">Tính năng bị khóa</h3>
+              <p className="text-gray-500 text-sm mt-1">Bạn cần đăng nhập để sử dụng tính năng cập nhật số dư tự động này.</p>
+           </div>
+        )}
+
         <label className="block text-sm font-medium text-gray-700 mb-2">Nội dung tin nhắn</label>
         <textarea
           className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 h-32 resize-none"
           placeholder="Ví dụ: Techcombank TK 1903... thay doi +50,000 VND tu NGUYEN VAN A..."
           value={inputObj}
           onChange={(e) => setInputObj(e.target.value)}
+          disabled={readOnly}
         ></textarea>
         
         <button
           onClick={handleScan}
-          disabled={loading || !inputObj.trim()}
+          disabled={loading || !inputObj.trim() || readOnly}
           className="w-full mt-4 bg-indigo-600 text-white py-3 rounded-lg font-bold hover:bg-indigo-700 disabled:opacity-50 flex justify-center items-center gap-2 transition-all"
         >
           {loading ? <Loader2 className="animate-spin" /> : <ScanLine size={20} />}

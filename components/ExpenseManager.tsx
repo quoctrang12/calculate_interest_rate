@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { ExpenseRecord } from '../types';
-import { ChevronLeft, ChevronRight, Plus, Trash2, Calendar as CalIcon, BarChart3, X, Zap } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus, Trash2, Calendar as CalIcon, BarChart3, X, Zap, Lock } from 'lucide-react';
 
 interface ExpenseManagerProps {
   expenses: ExpenseRecord[];
@@ -8,6 +8,7 @@ interface ExpenseManagerProps {
   onRemoveExpense: (id: string) => void;
   currencyFormatter: (val: number) => string;
   themeColor: string;
+  readOnly?: boolean;
 }
 
 type ViewMode = 'calendar' | 'stats';
@@ -17,7 +18,8 @@ export const ExpenseManager: React.FC<ExpenseManagerProps> = ({
   onAddExpense,
   onRemoveExpense,
   currencyFormatter,
-  themeColor
+  themeColor,
+  readOnly = false
 }) => {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [viewMode, setViewMode] = useState<ViewMode>('calendar');
@@ -41,6 +43,19 @@ export const ExpenseManager: React.FC<ExpenseManagerProps> = ({
   const [quickTitle, setQuickTitle] = useState('');
   const [quickAmount, setQuickAmount] = useState('');
   const [quickNote, setQuickNote] = useState('');
+
+  // --- ACCESS DENIED VIEW ---
+  if (readOnly) {
+      return (
+          <div className="h-full flex flex-col items-center justify-center p-6 text-center text-gray-500">
+             <div className="bg-gray-100 p-4 rounded-full mb-4">
+                <Lock size={48} className="text-gray-400" />
+             </div>
+             <h2 className="text-xl font-bold text-gray-800 mb-2">Quyền truy cập bị hạn chế</h2>
+             <p className="max-w-xs">Mục "Quản lý quỹ" chứa thông tin riêng tư. Vui lòng đăng nhập để xem và quản lý chi tiêu.</p>
+          </div>
+      );
+  }
 
   // --- Helpers ---
   // Fix: Sử dụng Local Time
