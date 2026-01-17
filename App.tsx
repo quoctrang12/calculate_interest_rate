@@ -8,7 +8,7 @@ import { ExpenseManager } from './components/ExpenseManager';
 import { LogViewer } from './components/LogViewer';
 import { AuthModal } from './components/AuthModal';
 import { saveToCloud, loadFromCloud } from './services/cloudService';
-import { Calendar, Users, ScanLine, Settings, PieChart, Wallet, Layers, Check, Download, Upload, Trash2, Database, AlertTriangle, Smartphone, Cloud, RefreshCw, Lock, Unlock, History, UserCircle2 } from 'lucide-react';
+import { Calendar, Users, ScanLine, Settings, PieChart, Wallet, Layers, Check, Download, Upload, Trash2, Database, AlertTriangle, Smartphone, Cloud, RefreshCw, Lock, History, UserCircle2 } from 'lucide-react';
 
 export default function App() {
   // --- State ---

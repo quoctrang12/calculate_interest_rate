@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { User } from '../types';
-import { X, Lock, UserPlus, LogIn, AlertCircle } from 'lucide-react';
+import { X, UserPlus, LogIn, AlertCircle } from 'lucide-react';
 
 interface AuthModalProps {
   isOpen: boolean;
