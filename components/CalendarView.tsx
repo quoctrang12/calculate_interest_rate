@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Employee, LunchRecord, LunchItem } from '../types';
+import { Employee, LunchRecord, LunchItem, ThemeClasses } from '../types';
 import { ChevronLeft, ChevronRight, Check, X, DollarSign, Lock } from 'lucide-react';
 
 interface CalendarViewProps {
@@ -8,6 +8,7 @@ interface CalendarViewProps {
   defaultCost: number;
   onSaveLunch: (date: string, items: LunchItem[]) => void;
   readOnly?: boolean;
+  theme: ThemeClasses;
 }
 
 export const CalendarView: React.FC<CalendarViewProps> = ({
@@ -15,7 +16,8 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
   lunchRecords,
   defaultCost,
   onSaveLunch,
-  readOnly = false
+  readOnly = false,
+  theme
 }) => {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDateStr, setSelectedDateStr] = useState<string | null>(null);
@@ -175,13 +177,13 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
               onClick={() => openDay(day)}
               className={`
                 aspect-square rounded-xl flex flex-col items-center justify-center relative shadow-sm border
-                ${isToday ? 'border-blue-500 bg-blue-50' : 'border-gray-100 bg-white'}
+                ${isToday ? `${theme.borderDark} ${theme.bg}` : 'border-gray-100 bg-white'}
                 ${count > 0 ? 'bg-green-50 border-green-200' : ''}
                 ${isSunday && !isToday && count === 0 ? 'bg-gray-50' : ''}
                 active:scale-95 transition-transform
               `}
             >
-              <span className={`text-sm font-semibold ${isToday ? 'text-blue-600' : (isSunday ? 'text-red-400' : 'text-gray-700')}`}>
+              <span className={`text-sm font-semibold ${isToday ? theme.text : (isSunday ? 'text-red-400' : 'text-gray-700')}`}>
                 {day}
               </span>
               {count > 0 && (
@@ -213,19 +215,19 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
             
             {/* Batch Price Control - Disable if ReadOnly */}
             {!readOnly && (
-            <div className="bg-blue-50 px-4 py-3 flex items-center justify-between border-b border-blue-100">
+            <div className={`px-4 py-3 flex items-center justify-between border-b ${theme.bg} ${theme.border}`}>
                <div className="flex items-center gap-2">
-                 <div className="bg-blue-200 p-1.5 rounded-lg text-blue-800">
+                 <div className={`p-1.5 rounded-lg ${theme.bgSoft} ${theme.textDark}`}>
                     <DollarSign size={16} />
                  </div>
-                 <span className="text-sm font-bold text-blue-900">Giá chung hôm nay</span>
+                 <span className={`text-sm font-bold ${theme.textDark}`}>Giá chung hôm nay</span>
                </div>
                <div className="relative w-32">
                   <input 
                     type="number"
                     value={batchPrice}
                     onChange={(e) => handleBatchPriceChange(e.target.value)}
-                    className="w-full pl-3 pr-8 py-1.5 text-right font-bold text-blue-800 bg-white border border-blue-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                    className={`w-full pl-3 pr-8 py-1.5 text-right font-bold bg-white border rounded-lg outline-none ${theme.textDark} ${theme.border} ${theme.ring}`}
                   />
                   <span className="absolute right-3 top-1.5 text-xs text-gray-400 font-bold">đ</span>
                </div>
@@ -234,7 +236,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
 
             {!readOnly && (
             <div className="p-2 flex justify-end px-4 border-b border-gray-100 bg-white">
-                 <button onClick={selectAll} className="text-xs text-blue-600 font-semibold uppercase py-2 hover:bg-blue-50 px-2 rounded">
+                 <button onClick={selectAll} className={`text-xs font-semibold uppercase py-2 px-2 rounded hover:bg-gray-50 ${theme.text}`}>
                    Chọn tất cả
                  </button>
             </div>
@@ -250,7 +252,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                     key={emp.id}
                     className={`rounded-xl border transition-all overflow-hidden ${
                       isSelected 
-                        ? 'border-blue-500 bg-blue-50/50 shadow-sm' 
+                        ? `${theme.border} ${theme.bgSoft} shadow-sm` 
                         : 'border-gray-200 bg-white opacity-80'
                     }`}
                   >
@@ -259,10 +261,10 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                       onClick={() => toggleEmployee(emp.id)}
                       className={`p-3 flex items-center gap-3 ${readOnly ? 'cursor-default' : 'cursor-pointer'}`}
                     >
-                      <div className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${isSelected ? 'bg-blue-600 border-blue-600' : 'border-gray-300 bg-white'}`}>
+                      <div className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${isSelected ? `${theme.bgDark} ${theme.borderDark}` : 'border-gray-300 bg-white'}`}>
                         {isSelected && <Check size={14} className="text-white" />}
                       </div>
-                      <span className={`font-medium flex-1 ${isSelected ? 'text-blue-900' : 'text-gray-700'}`}>{emp.name}</span>
+                      <span className={`font-medium flex-1 ${isSelected ? theme.textDark : 'text-gray-700'}`}>{emp.name}</span>
                     </div>
 
                     {/* Details Row: Price + Note (Only if selected) */}
@@ -270,7 +272,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                       <div className="px-3 pb-3 pt-0 flex gap-2 animate-fade-in">
                          <div className="flex-1">
                             <label className="text-[10px] text-gray-500 uppercase font-bold">Giá tiền</label>
-                            <div className={`flex items-center border rounded-lg px-2 py-1.5 ${readOnly ? 'bg-gray-100 border-gray-200' : 'bg-white border-blue-200'}`}>
+                            <div className={`flex items-center border rounded-lg px-2 py-1.5 ${readOnly ? 'bg-gray-100 border-gray-200' : `bg-white ${theme.border}`}`}>
                                 <span className="text-gray-400 text-xs mr-1">₫</span>
                                 <input 
                                   type="number" 
@@ -278,7 +280,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                                   disabled={readOnly}
                                   onClick={(e) => e.stopPropagation()}
                                   onChange={(e) => updateItemDetails(emp.id, 'price', e.target.value)}
-                                  className="w-full text-sm font-semibold text-blue-700 outline-none bg-transparent disabled:text-gray-600"
+                                  className={`w-full text-sm font-semibold outline-none bg-transparent disabled:text-gray-600 ${theme.textDark}`}
                                 />
                             </div>
                          </div>
@@ -291,7 +293,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                                 disabled={readOnly}
                                 onClick={(e) => e.stopPropagation()}
                                 onChange={(e) => updateItemDetails(emp.id, 'note', e.target.value)}
-                                className={`w-full text-sm rounded-lg px-2 py-1.5 outline-none text-gray-700 ${readOnly ? 'bg-gray-100 border border-gray-200' : 'bg-white border border-blue-200 focus:ring-1 focus:ring-blue-500'}`}
+                                className={`w-full text-sm rounded-lg px-2 py-1.5 outline-none text-gray-700 ${readOnly ? 'bg-gray-100 border border-gray-200' : `bg-white border ${theme.border} ${theme.ring}`}`}
                             />
                          </div>
                       </div>
@@ -310,7 +312,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
               ) : (
                 <button
                     onClick={saveAndClose}
-                    className="w-full bg-blue-600 text-white py-3 rounded-xl font-bold hover:bg-blue-700 transition-colors shadow-lg shadow-blue-200"
+                    className={`w-full text-white py-3 rounded-xl font-bold transition-colors shadow-lg ${theme.bgDark} ${theme.bgDarkHover} ${theme.shadow}`}
                 >
                     Lưu ({tempItems.size} người)
                 </button>

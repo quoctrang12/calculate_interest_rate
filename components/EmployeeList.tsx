@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Employee } from '../types';
+import { Employee, ThemeClasses } from '../types';
 import { Trash2, UserPlus, Wallet, Edit3, X, ArrowUpRight, ArrowDownLeft, Lock } from 'lucide-react';
 
 interface EmployeeListProps {
@@ -9,6 +9,7 @@ interface EmployeeListProps {
   onAdjustBalance: (id: string, amount: number) => void;
   currencyFormatter: (val: number) => string;
   readOnly?: boolean;
+  theme: ThemeClasses;
 }
 
 export const EmployeeList: React.FC<EmployeeListProps> = ({ 
@@ -17,7 +18,8 @@ export const EmployeeList: React.FC<EmployeeListProps> = ({
   onRemoveEmployee,
   onAdjustBalance,
   currencyFormatter,
-  readOnly = false
+  readOnly = false,
+  theme
 }) => {
   const [newName, setNewName] = useState('');
   
@@ -51,7 +53,7 @@ export const EmployeeList: React.FC<EmployeeListProps> = ({
       {!readOnly ? (
         <div className="bg-white rounded-xl shadow-sm p-4 border border-gray-100">
           <h2 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
-            <UserPlus size={20} className="text-blue-600" />
+            <UserPlus size={20} className={theme.text} />
             Thêm nhân viên
           </h2>
           <form onSubmit={handleSubmit} className="flex gap-2">
@@ -60,19 +62,19 @@ export const EmployeeList: React.FC<EmployeeListProps> = ({
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
               placeholder="Nhập tên nhân viên..."
-              className="flex-1 p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className={`flex-1 p-3 border border-gray-300 rounded-lg outline-none focus:ring-2 ${theme.ring}`}
             />
             <button
               type="submit"
               disabled={!newName.trim()}
-              className="bg-blue-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors"
+              className={`text-white px-4 py-2 rounded-lg font-medium disabled:opacity-50 transition-colors ${theme.bgDark} ${theme.bgDarkHover}`}
             >
               Thêm
             </button>
           </form>
         </div>
       ) : (
-        <div className="bg-blue-50 text-blue-800 p-3 rounded-xl flex items-center gap-2 text-sm font-medium">
+        <div className={`p-3 rounded-xl flex items-center gap-2 text-sm font-medium ${theme.bg} ${theme.textDark}`}>
             <Lock size={16} />
             Đang ở chế độ xem. Đăng nhập để chỉnh sửa.
         </div>
@@ -101,7 +103,7 @@ export const EmployeeList: React.FC<EmployeeListProps> = ({
                 <div className="flex items-center gap-1">
                    <button
                     onClick={() => setSelectedEmp(emp)}
-                    className="p-2 bg-gray-50 text-blue-600 rounded-lg hover:bg-blue-50 transition-colors"
+                    className={`p-2 rounded-lg transition-colors ${theme.bg} ${theme.text} hover:bg-gray-100`}
                     title="Điều chỉnh số dư"
                   >
                     <Edit3 size={18} />
@@ -146,7 +148,7 @@ export const EmployeeList: React.FC<EmployeeListProps> = ({
                 onChange={e => setAdjustAmount(e.target.value)}
                 placeholder="0"
                 autoFocus
-                className="w-full text-2xl font-bold text-center p-3 border border-gray-300 rounded-xl mb-6 focus:ring-2 focus:ring-blue-500 outline-none"
+                className={`w-full text-2xl font-bold text-center p-3 border border-gray-300 rounded-xl mb-6 outline-none focus:ring-2 ${theme.ring}`}
               />
 
               <div className="grid grid-cols-2 gap-3">

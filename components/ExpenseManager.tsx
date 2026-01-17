@@ -1,28 +1,41 @@
 import React, { useState, useMemo } from 'react';
-import { ExpenseRecord, User } from '../types';
-import { ChevronLeft, ChevronRight, Plus, Trash2, Calendar as CalIcon, BarChart3, X, Zap, Lock, LogIn } from 'lucide-react';
+import { ExpenseRecord, User, DebtRecord, ThemeClasses } from '../types';
+import { DebtBook } from './DebtBook';
+import { ChevronLeft, ChevronRight, Plus, Trash2, Calendar as CalIcon, BarChart3, X, Zap, Lock, LogIn, Book, Wallet } from 'lucide-react';
 
 interface ExpenseManagerProps {
   expenses: ExpenseRecord[];
   onAddExpense: (expense: ExpenseRecord) => void;
   onRemoveExpense: (id: string) => void;
+  // Debt Props
+  debts: DebtRecord[];
+  onAddDebt: (debt: DebtRecord) => void;
+  onUpdateDebt: (debt: DebtRecord) => void;
+  onDeleteDebt: (id: string) => void;
+  
   currencyFormatter: (val: number) => string;
-  themeColor: string;
+  theme: ThemeClasses;
   currentUser: User | null;
   onOpenLogin: () => void;
 }
 
 type ViewMode = 'calendar' | 'stats';
+type ModuleMode = 'expense' | 'debt';
 
 export const ExpenseManager: React.FC<ExpenseManagerProps> = ({
   expenses,
   onAddExpense,
   onRemoveExpense,
+  debts,
+  onAddDebt,
+  onUpdateDebt,
+  onDeleteDebt,
   currencyFormatter,
-  themeColor,
+  theme,
   currentUser,
   onOpenLogin
 }) => {
+  const [moduleMode, setModuleMode] = useState<ModuleMode>('expense');
   const [currentDate, setCurrentDate] = useState(new Date());
   const [viewMode, setViewMode] = useState<ViewMode>('calendar');
   const [selectedDateStr, setSelectedDateStr] = useState<string | null>(null);
@@ -43,14 +56,14 @@ export const ExpenseManager: React.FC<ExpenseManagerProps> = ({
                 <Lock size={48} className="text-gray-400" />
              </div>
              <div>
-               <h2 className="text-xl font-bold text-gray-800 mb-2">Quản lý chi tiêu cá nhân</h2>
+               <h2 className="text-xl font-bold text-gray-800 mb-2">Quản lý tài chính cá nhân</h2>
                <p className="max-w-xs text-sm leading-relaxed">
-                 Vui lòng đăng nhập hoặc đăng ký tài khoản để sử dụng tính năng quản lý quỹ riêng của bạn. Dữ liệu của bạn sẽ được bảo mật.
+                 Vui lòng đăng nhập hoặc đăng ký tài khoản để sử dụng tính năng Quản lý quỹ và Sổ nợ. Dữ liệu của bạn sẽ được bảo mật.
                </p>
              </div>
              <button 
                onClick={onOpenLogin}
-               className="bg-blue-600 text-white px-6 py-3 rounded-xl font-bold shadow-lg shadow-blue-200 hover:bg-blue-700 transition-all flex items-center gap-2"
+               className={`${theme.bgDark} text-white px-6 py-3 rounded-xl font-bold shadow-lg ${theme.shadow} hover:opacity-90 transition-all flex items-center gap-2`}
              >
                <LogIn size={20} />
                Đăng nhập / Đăng ký
@@ -59,17 +72,45 @@ export const ExpenseManager: React.FC<ExpenseManagerProps> = ({
       );
   }
 
-  // --- Data Logic (Filter by User) ---
-  // If admin: show Global/Shared expenses (where userId is missing or 'admin')
-  // If user: show their own expenses (where userId === currentUser.id)
-  
+  // --- SUB MODULE: DEBT BOOK ---
+  if (moduleMode === 'debt') {
+      return (
+        <div className="flex flex-col h-full">
+           {/* Module Switcher Header */}
+           <div className="bg-white border-b border-gray-100 p-2">
+              <div className="flex bg-gray-100 p-1 rounded-xl">
+                  <button onClick={() => setModuleMode('expense')} className="flex-1 py-2 text-sm font-bold text-gray-500 flex items-center justify-center gap-2">
+                     <Wallet size={16} /> Quỹ chi
+                  </button>
+                  <button className={`flex-1 py-2 text-sm font-bold rounded-lg bg-white shadow-sm flex items-center justify-center gap-2 ${theme.text}`}>
+                     <Book size={16} /> Sổ nợ
+                  </button>
+              </div>
+           </div>
+           
+           <div className="flex-1 overflow-hidden">
+               <DebtBook 
+                  debts={debts}
+                  onAddDebt={onAddDebt}
+                  onUpdateDebt={onUpdateDebt}
+                  onDeleteDebt={onDeleteDebt}
+                  currentUser={currentUser}
+                  currencyFormatter={currencyFormatter}
+                  theme={theme}
+               />
+           </div>
+        </div>
+      );
+  }
+
+  // --- MODULE: EXPENSE ---
+
+  // Data Logic (Filter by User)
   const userExpenses = useMemo(() => {
     return expenses.filter(e => {
       if (currentUser.role === 'admin') {
-        // Admin sees expenses with no userId (legacy/shared) OR userId = 'admin'
         return !e.userId || e.userId === 'admin';
       } else {
-        // Normal user sees only their own
         return e.userId === currentUser.id;
       }
     });
@@ -81,7 +122,8 @@ export const ExpenseManager: React.FC<ExpenseManagerProps> = ({
      return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
   };
 
-  const [quickDate, setQuickDate] = useState(getTodayString);
+  const initialQuickDate = getTodayString();
+  const [quickDate, setQuickDate] = useState(initialQuickDate);
   const [quickTitle, setQuickTitle] = useState('');
   const [quickAmount, setQuickAmount] = useState('');
   const [quickNote, setQuickNote] = useState('');
@@ -97,20 +139,6 @@ export const ExpenseManager: React.FC<ExpenseManagerProps> = ({
 
   const prevMonth = () => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1));
   const nextMonth = () => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1));
-
-  // --- Theme Style Logic ---
-  const getThemeStyles = () => {
-    const map: Record<string, any> = {
-      orange: { text: 'text-orange-600', textLight: 'text-orange-100', bg: 'bg-orange-50', bgDark: 'bg-orange-500', bgDarkHover: 'hover:bg-orange-600', border: 'border-orange-200', borderDark: 'border-orange-500', gradient: 'from-orange-500 to-red-500', focusRing: 'focus:ring-orange-500', borderFocus: 'focus:border-orange-500' },
-      blue: { text: 'text-blue-600', textLight: 'text-blue-100', bg: 'bg-blue-50', bgDark: 'bg-blue-500', bgDarkHover: 'hover:bg-blue-600', border: 'border-blue-200', borderDark: 'border-blue-500', gradient: 'from-blue-500 to-indigo-500', focusRing: 'focus:ring-blue-500', borderFocus: 'focus:border-blue-500' },
-      green: { text: 'text-green-600', textLight: 'text-green-100', bg: 'bg-green-50', bgDark: 'bg-green-500', bgDarkHover: 'hover:bg-green-600', border: 'border-green-200', borderDark: 'border-green-500', gradient: 'from-green-500 to-teal-500', focusRing: 'focus:ring-green-500', borderFocus: 'focus:border-green-500' },
-      purple: { text: 'text-purple-600', textLight: 'text-purple-100', bg: 'bg-purple-50', bgDark: 'bg-purple-500', bgDarkHover: 'hover:bg-purple-600', border: 'border-purple-200', borderDark: 'border-purple-500', gradient: 'from-purple-500 to-fuchsia-500', focusRing: 'focus:ring-purple-500', borderFocus: 'focus:border-purple-500' },
-      pink: { text: 'text-pink-600', textLight: 'text-pink-100', bg: 'bg-pink-50', bgDark: 'bg-pink-500', bgDarkHover: 'hover:bg-pink-600', border: 'border-pink-200', borderDark: 'border-pink-500', gradient: 'from-pink-500 to-rose-500', focusRing: 'focus:ring-pink-500', borderFocus: 'focus:border-pink-500' },
-      teal: { text: 'text-teal-600', textLight: 'text-teal-100', bg: 'bg-teal-50', bgDark: 'bg-teal-500', bgDarkHover: 'hover:bg-teal-600', border: 'border-teal-200', borderDark: 'border-teal-500', gradient: 'from-teal-500 to-emerald-500', focusRing: 'focus:ring-teal-500', borderFocus: 'focus:border-teal-500' },
-    };
-    return map[themeColor] || map.orange;
-  };
-  const theme = getThemeStyles();
 
   // --- Data Logic with userExpenses ---
   const monthKey = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}`;
@@ -133,10 +161,7 @@ export const ExpenseManager: React.FC<ExpenseManagerProps> = ({
     const weeklyData: { week: number; total: number; items: ExpenseRecord[] }[] = [];
     
     monthlyExpenses.forEach(e => {
-      // Parse manual date string (YYYY-MM-DD) to integer day to avoid UTC shift
       const dayOfMonth = parseInt(e.date.split('-')[2]);
-      
-      // Simple week calculation: Week of month (1-5)
       const weekNum = Math.ceil(dayOfMonth / 7);
       
       let weekGroup = weeklyData.find(w => w.week === weekNum);
@@ -149,7 +174,6 @@ export const ExpenseManager: React.FC<ExpenseManagerProps> = ({
     });
 
     weeklyData.sort((a, b) => a.week - b.week);
-    
     return { totalMonth, weeklyData };
   }, [monthlyExpenses]);
 
@@ -195,8 +219,6 @@ export const ExpenseManager: React.FC<ExpenseManagerProps> = ({
   // --- Render Calendar Grid ---
   const renderCalendar = () => {
     const daysInMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0).getDate();
-    
-    // Calculate first day index (Mon=0, ... Sun=6)
     const getFirstDayIndex = () => {
        const day = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1).getDay();
        return day === 0 ? 6 : day - 1;
@@ -213,10 +235,8 @@ export const ExpenseManager: React.FC<ExpenseManagerProps> = ({
         </div>
         
         <div className="grid grid-cols-7 gap-2 flex-1 auto-rows-fr overflow-y-auto p-1">
-          {/* Empty Cells */}
           {Array.from({ length: firstDay }).map((_, i) => <div key={`empty-${i}`} />)}
           
-          {/* Days */}
           {Array.from({ length: daysInMonth }).map((_, i) => {
             const day = i + 1;
             const date = new Date(currentDate.getFullYear(), currentDate.getMonth(), day);
@@ -256,7 +276,6 @@ export const ExpenseManager: React.FC<ExpenseManagerProps> = ({
   // --- Render Stats ---
   const renderStats = () => (
     <div className="flex-1 overflow-y-auto p-1 space-y-4">
-      {/* Summary */}
       <div className={`bg-gradient-to-r ${theme.gradient} p-5 rounded-2xl text-white shadow-lg`}>
         <div className="flex justify-between items-start">
            <div>
@@ -302,12 +321,22 @@ export const ExpenseManager: React.FC<ExpenseManagerProps> = ({
 
   return (
     <div className="p-4 pb-24 h-full flex flex-col">
+       {/* Module Switcher */}
+       <div className="flex bg-gray-100 p-1 rounded-xl mb-4 shrink-0">
+          <button className={`flex-1 py-2 text-sm font-bold rounded-lg bg-white shadow-sm flex items-center justify-center gap-2 ${theme.text}`}>
+              <Wallet size={16} /> Quỹ chi
+          </button>
+          <button onClick={() => setModuleMode('debt')} className="flex-1 py-2 text-sm font-bold text-gray-500 flex items-center justify-center gap-2 hover:text-gray-700 transition-colors">
+              <Book size={16} /> Sổ nợ
+          </button>
+       </div>
+
       {/* Header & Controls */}
-      <div className="flex flex-col gap-4 mb-4">
+      <div className="flex flex-col gap-4 mb-4 shrink-0">
         <div className="flex justify-between items-center">
           <button onClick={prevMonth} className="p-2 hover:bg-gray-100 rounded-full"><ChevronLeft /></button>
           <div className="flex flex-col items-center">
-             <span className="text-xs text-gray-400 font-bold uppercase">Quản lý quỹ</span>
+             <span className="text-xs text-gray-400 font-bold uppercase">Lịch sử chi tiêu</span>
              <h2 className="text-xl font-bold text-gray-800">
                Tháng {currentDate.getMonth() + 1} / {currentDate.getFullYear()}
              </h2>
@@ -365,7 +394,7 @@ export const ExpenseManager: React.FC<ExpenseManagerProps> = ({
                       type="date" 
                       value={quickDate}
                       onChange={e => setQuickDate(e.target.value)}
-                      className={`w-full p-2 text-sm rounded-lg border border-gray-300 focus:ring-1 outline-none ${theme.focusRing} ${theme.borderFocus}`}
+                      className={`w-full p-2 text-sm rounded-lg border border-gray-300 focus:ring-1 outline-none ${theme.ring} ${theme.borderDark}`}
                    />
                 </div>
                 <div>
@@ -375,7 +404,7 @@ export const ExpenseManager: React.FC<ExpenseManagerProps> = ({
                       placeholder="0"
                       value={quickAmount}
                       onChange={e => setQuickAmount(e.target.value)}
-                      className={`w-full p-2 text-sm rounded-lg border border-gray-300 focus:ring-1 outline-none font-bold ${theme.focusRing} ${theme.borderFocus}`}
+                      className={`w-full p-2 text-sm rounded-lg border border-gray-300 focus:ring-1 outline-none font-bold ${theme.ring} ${theme.borderDark}`}
                    />
                 </div>
              </div>
@@ -387,7 +416,7 @@ export const ExpenseManager: React.FC<ExpenseManagerProps> = ({
                    placeholder="Vd: Ăn sáng, Xăng xe..."
                    value={quickTitle}
                    onChange={e => setQuickTitle(e.target.value)}
-                   className={`w-full p-2 text-sm rounded-lg border border-gray-300 focus:ring-1 outline-none ${theme.focusRing} ${theme.borderFocus}`}
+                   className={`w-full p-2 text-sm rounded-lg border border-gray-300 focus:ring-1 outline-none ${theme.ring} ${theme.borderDark}`}
                 />
              </div>
              
@@ -397,7 +426,7 @@ export const ExpenseManager: React.FC<ExpenseManagerProps> = ({
                    placeholder="Ghi chú (tùy chọn)..."
                    value={quickNote}
                    onChange={e => setQuickNote(e.target.value)}
-                   className={`w-full p-2 text-xs rounded-lg border border-gray-200 focus:ring-1 outline-none text-gray-600 ${theme.focusRing} ${theme.borderFocus}`}
+                   className={`w-full p-2 text-xs rounded-lg border border-gray-200 focus:ring-1 outline-none text-gray-600 ${theme.ring} ${theme.borderDark}`}
                 />
              </div>
 
@@ -421,7 +450,7 @@ export const ExpenseManager: React.FC<ExpenseManagerProps> = ({
           <div className="bg-white w-full sm:max-w-md h-[90vh] sm:h-auto sm:rounded-2xl rounded-t-3xl shadow-2xl flex flex-col">
             <div className={`p-4 border-b border-gray-100 flex justify-between items-center ${theme.bg} rounded-t-3xl sm:rounded-t-2xl`}>
               <div>
-                <h3 className={`text-lg font-bold ${theme.text.replace('600', '800')}`}>Chi tiêu ngày {selectedDateStr.split('-').reverse().join('/')}</h3>
+                <h3 className={`text-lg font-bold ${theme.textDark}`}>Chi tiêu ngày {selectedDateStr.split('-').reverse().join('/')}</h3>
               </div>
               <button onClick={() => setSelectedDateStr(null)} className="p-2 text-gray-400 hover:text-gray-600">
                 <X />
@@ -436,21 +465,21 @@ export const ExpenseManager: React.FC<ExpenseManagerProps> = ({
                   placeholder="Tên khoản chi (vd: Nước uống)" 
                   value={newTitle}
                   onChange={e => setNewTitle(e.target.value)}
-                  className={`w-full p-2 rounded-lg border border-gray-300 focus:ring-1 outline-none ${theme.focusRing} ${theme.borderFocus}`}
+                  className={`w-full p-2 rounded-lg border border-gray-300 focus:ring-1 outline-none ${theme.ring} ${theme.borderDark}`}
                 />
                  <input 
                   type="number" 
                   placeholder="Số tiền" 
                   value={newAmount}
                   onChange={e => setNewAmount(e.target.value)}
-                  className={`w-full p-2 rounded-lg border border-gray-300 focus:ring-1 outline-none ${theme.focusRing} ${theme.borderFocus}`}
+                  className={`w-full p-2 rounded-lg border border-gray-300 focus:ring-1 outline-none ${theme.ring} ${theme.borderDark}`}
                 />
                  <input 
                   type="text" 
                   placeholder="Ghi chú (tùy chọn)" 
                   value={newNote}
                   onChange={e => setNewNote(e.target.value)}
-                  className={`w-full p-2 rounded-lg border border-gray-300 focus:ring-1 outline-none text-sm ${theme.focusRing} ${theme.borderFocus}`}
+                  className={`w-full p-2 rounded-lg border border-gray-300 focus:ring-1 outline-none text-sm ${theme.ring} ${theme.borderDark}`}
                 />
                 <button 
                   onClick={handleAdd}
