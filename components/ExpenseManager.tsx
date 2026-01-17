@@ -47,7 +47,121 @@ export const ExpenseManager: React.FC<ExpenseManagerProps> = ({
 
   // --- Quick Entry State ---
   const [showQuickAdd, setShowQuickAdd] = useState(false);
+
+  // Initialize date with Local Date string
+  const getTodayString = () => {
+     const d = new Date();
+     return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  };
+
+  const initialQuickDate = getTodayString();
+  const [quickDate, setQuickDate] = useState(initialQuickDate);
+  const [quickTitle, setQuickTitle] = useState('');
+  const [quickAmount, setQuickAmount] = useState('');
+  const [quickNote, setQuickNote] = useState('');
+
+  // --- Data Logic (Filter by User) ---
+  // Moved up before early returns to satisfy Rules of Hooks
+  const userExpenses = useMemo(() => {
+    if (!currentUser) return [];
+    return expenses.filter(e => {
+      if (currentUser.role === 'admin') {
+        return !e.userId || e.userId === 'admin';
+      } else {
+        return e.userId === currentUser.id;
+      }
+    });
+  }, [expenses, currentUser]);
+
+  // Data Logic with userExpenses
+  const monthKey = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}`;
+  const monthlyExpenses = userExpenses.filter(e => e.date.startsWith(monthKey));
   
+  // Group expenses by date for Calendar view
+  const expensesByDate = useMemo(() => {
+    const map = new Map<string, number>();
+    monthlyExpenses.forEach(e => {
+      map.set(e.date, (map.get(e.date) || 0) + e.amount);
+    });
+    return map;
+  }, [monthlyExpenses]);
+
+  // Statistics Logic
+  const stats = useMemo(() => {
+    const totalMonth = monthlyExpenses.reduce((sum, e) => sum + e.amount, 0);
+    
+    // Group by Week
+    const weeklyData: { week: number; total: number; items: ExpenseRecord[] }[] = [];
+    
+    monthlyExpenses.forEach(e => {
+      const dayOfMonth = parseInt(e.date.split('-')[2]);
+      const weekNum = Math.ceil(dayOfMonth / 7);
+      
+      let weekGroup = weeklyData.find(w => w.week === weekNum);
+      if (!weekGroup) {
+        weekGroup = { week: weekNum, total: 0, items: [] };
+        weeklyData.push(weekGroup);
+      }
+      weekGroup.total += e.amount;
+      weekGroup.items.push(e);
+    });
+
+    weeklyData.sort((a, b) => a.week - b.week);
+    return { totalMonth, weeklyData };
+  }, [monthlyExpenses]);
+  
+  // --- Helpers ---
+  // Fix: Sử dụng Local Time
+  const formatDate = (date: Date) => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
+  const prevMonth = () => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1));
+  const nextMonth = () => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1));
+
+  // --- Handlers ---
+  const handleAdd = () => {
+    if (selectedDateStr && newTitle && newAmount && currentUser) {
+      onAddExpense({
+        id: Date.now().toString(),
+        userId: currentUser.id,
+        date: selectedDateStr,
+        title: newTitle,
+        amount: Number(newAmount),
+        note: newNote
+      });
+      setNewTitle('');
+      setNewAmount('');
+      setNewNote('');
+    }
+  };
+
+  const handleQuickAdd = () => {
+    if (quickDate && quickTitle && quickAmount && currentUser) {
+      onAddExpense({
+        id: Date.now().toString(),
+        userId: currentUser.id,
+        date: quickDate,
+        title: quickTitle,
+        amount: Number(quickAmount),
+        note: quickNote
+      });
+      setQuickTitle('');
+      setQuickAmount('');
+      setQuickNote('');
+      setShowQuickAdd(false);
+    }
+  };
+
+  const openDay = (day: number) => {
+    const date = new Date(currentDate.getFullYear(), currentDate.getMonth(), day);
+    setSelectedDateStr(formatDate(date));
+  };
+
+
   // --- ACCESS DENIED VIEW (Not Logged In) ---
   if (!currentUser) {
       return (
@@ -104,117 +218,6 @@ export const ExpenseManager: React.FC<ExpenseManagerProps> = ({
   }
 
   // --- MODULE: EXPENSE ---
-
-  // Data Logic (Filter by User)
-  const userExpenses = useMemo(() => {
-    return expenses.filter(e => {
-      if (currentUser.role === 'admin') {
-        return !e.userId || e.userId === 'admin';
-      } else {
-        return e.userId === currentUser.id;
-      }
-    });
-  }, [expenses, currentUser]);
-
-  // Initialize date with Local Date string
-  const getTodayString = () => {
-     const d = new Date();
-     return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-  };
-
-  const initialQuickDate = getTodayString();
-  const [quickDate, setQuickDate] = useState(initialQuickDate);
-  const [quickTitle, setQuickTitle] = useState('');
-  const [quickAmount, setQuickAmount] = useState('');
-  const [quickNote, setQuickNote] = useState('');
-
-  // --- Helpers ---
-  // Fix: Sử dụng Local Time
-  const formatDate = (date: Date) => {
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
-  };
-
-  const prevMonth = () => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1));
-  const nextMonth = () => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1));
-
-  // --- Data Logic with userExpenses ---
-  const monthKey = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}`;
-  const monthlyExpenses = userExpenses.filter(e => e.date.startsWith(monthKey));
-  
-  // Group expenses by date for Calendar view
-  const expensesByDate = useMemo(() => {
-    const map = new Map<string, number>();
-    monthlyExpenses.forEach(e => {
-      map.set(e.date, (map.get(e.date) || 0) + e.amount);
-    });
-    return map;
-  }, [monthlyExpenses]);
-
-  // Statistics Logic
-  const stats = useMemo(() => {
-    const totalMonth = monthlyExpenses.reduce((sum, e) => sum + e.amount, 0);
-    
-    // Group by Week
-    const weeklyData: { week: number; total: number; items: ExpenseRecord[] }[] = [];
-    
-    monthlyExpenses.forEach(e => {
-      const dayOfMonth = parseInt(e.date.split('-')[2]);
-      const weekNum = Math.ceil(dayOfMonth / 7);
-      
-      let weekGroup = weeklyData.find(w => w.week === weekNum);
-      if (!weekGroup) {
-        weekGroup = { week: weekNum, total: 0, items: [] };
-        weeklyData.push(weekGroup);
-      }
-      weekGroup.total += e.amount;
-      weekGroup.items.push(e);
-    });
-
-    weeklyData.sort((a, b) => a.week - b.week);
-    return { totalMonth, weeklyData };
-  }, [monthlyExpenses]);
-
-  // --- Handlers ---
-  const handleAdd = () => {
-    if (selectedDateStr && newTitle && newAmount) {
-      onAddExpense({
-        id: Date.now().toString(),
-        userId: currentUser.id,
-        date: selectedDateStr,
-        title: newTitle,
-        amount: Number(newAmount),
-        note: newNote
-      });
-      setNewTitle('');
-      setNewAmount('');
-      setNewNote('');
-    }
-  };
-
-  const handleQuickAdd = () => {
-    if (quickDate && quickTitle && quickAmount) {
-      onAddExpense({
-        id: Date.now().toString(),
-        userId: currentUser.id,
-        date: quickDate,
-        title: quickTitle,
-        amount: Number(quickAmount),
-        note: quickNote
-      });
-      setQuickTitle('');
-      setQuickAmount('');
-      setQuickNote('');
-      setShowQuickAdd(false);
-    }
-  };
-
-  const openDay = (day: number) => {
-    const date = new Date(currentDate.getFullYear(), currentDate.getMonth(), day);
-    setSelectedDateStr(formatDate(date));
-  };
 
   // --- Render Calendar Grid ---
   const renderCalendar = () => {
@@ -283,7 +286,7 @@ export const ExpenseManager: React.FC<ExpenseManagerProps> = ({
              <div className="text-3xl font-bold mt-1">{currencyFormatter(stats.totalMonth)}</div>
            </div>
            <div className="bg-white/20 p-2 rounded-lg">
-              <span className="text-xs font-bold">{currentUser.username}</span>
+              <span className="text-xs font-bold">{currentUser?.username}</span>
            </div>
         </div>
       </div>
