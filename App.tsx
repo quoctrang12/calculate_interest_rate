@@ -1,20 +1,31 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Employee, LunchRecord, LunchItem, AppSettings, Tab, ExpenseRecord, SystemLog } from './types';
+import { Employee, LunchRecord, LunchItem, AppSettings, Tab, ExpenseRecord, SystemLog, User, AuthSession } from './types';
 import { CalendarView } from './components/CalendarView';
 import { EmployeeList } from './components/EmployeeList';
 import { PaymentScanner } from './components/PaymentScanner';
 import { StatsView } from './components/StatsView';
 import { ExpenseManager } from './components/ExpenseManager';
 import { LogViewer } from './components/LogViewer';
+import { AuthModal } from './components/AuthModal';
 import { saveToCloud, loadFromCloud } from './services/cloudService';
-import { Calendar, Users, ScanLine, Settings, PieChart, Wallet, Layers, Check, Download, Upload, Trash2, Database, AlertTriangle, Smartphone, Cloud, RefreshCw, Lock, Unlock, History } from 'lucide-react';
+import { Calendar, Users, ScanLine, Settings, PieChart, Wallet, Layers, Check, Download, Upload, Trash2, Database, AlertTriangle, Smartphone, Cloud, RefreshCw, Lock, Unlock, History, UserCircle2 } from 'lucide-react';
 
 export default function App() {
   // --- State ---
   const [activeTab, setActiveTab] = useState<Tab>(Tab.CALENDAR);
   const [isLoadingCloud, setIsLoadingCloud] = useState(false);
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
   
+  // Auth State
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  
+  // Users List (Stored in Cloud/Local)
+  const [users, setUsers] = useState<User[]>(() => {
+    const saved = localStorage.getItem('users');
+    const defaultAdmin: User = { id: 'admin', username: 'admin', password: '123456', role: 'admin', createdAt: new Date().toISOString() };
+    return saved ? JSON.parse(saved) : [defaultAdmin];
+  });
+
   // Initial Load Flag to prevent overwriting cloud data with empty local state on first mount
   const [isInitialized, setIsInitialized] = useState(false);
 
@@ -64,6 +75,55 @@ export default function App() {
     return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(val);
   };
 
+  const isAdmin = currentUser?.role === 'admin';
+
+  // --- Session Management ---
+  useEffect(() => {
+    // Check local session
+    const sessionStr = localStorage.getItem('auth_session');
+    if (sessionStr) {
+      try {
+        const session: AuthSession = JSON.parse(sessionStr);
+        if (session.expiresAt > Date.now()) {
+          setCurrentUser(session.user);
+        } else {
+          localStorage.removeItem('auth_session'); // Expired
+        }
+      } catch (e) {
+        localStorage.removeItem('auth_session');
+      }
+    }
+  }, []);
+
+  const handleLogin = (user: User) => {
+    setCurrentUser(user);
+    // Persist session for 7 days
+    const session: AuthSession = {
+      user,
+      expiresAt: Date.now() + 7 * 24 * 60 * 60 * 1000
+    };
+    localStorage.setItem('auth_session', JSON.stringify(session));
+    addLog('Đăng nhập', `Người dùng ${user.username} đã đăng nhập`);
+  };
+
+  const handleLogout = () => {
+    if (window.confirm("Bạn có chắc chắn muốn đăng xuất?")) {
+      setCurrentUser(null);
+      localStorage.removeItem('auth_session');
+      setActiveTab(Tab.CALENDAR);
+    }
+  };
+
+  const handleRegister = (newUser: User) => {
+    setUsers(prev => {
+        const updated = [...prev, newUser];
+        localStorage.setItem('users', JSON.stringify(updated)); // Immediate local save
+        saveToCloud('users', updated);
+        return updated;
+    });
+    addLog('Đăng ký', `Người dùng mới: ${newUser.username}`);
+  };
+
   // --- Cloud Sync Effects ---
   
   // 1. Load from Cloud on Mount (Supabase)
@@ -73,12 +133,13 @@ export default function App() {
       if (process.env.VITE_SUPABASE_URL) {
         setIsLoadingCloud(true);
         try {
-          const [cloudEmps, cloudLunch, cloudExp, cloudSettings, cloudLogs] = await Promise.all([
+          const [cloudEmps, cloudLunch, cloudExp, cloudSettings, cloudLogs, cloudUsers] = await Promise.all([
             loadFromCloud('employees'),
             loadFromCloud('lunchRecords'),
             loadFromCloud('expenseRecords'),
             loadFromCloud('settings'),
-            loadFromCloud('logs')
+            loadFromCloud('logs'),
+            loadFromCloud('users')
           ]);
 
           if (cloudEmps) setEmployees(cloudEmps);
@@ -86,6 +147,7 @@ export default function App() {
           if (cloudExp) setExpenseRecords(cloudExp);
           if (cloudSettings) setSettings(cloudSettings);
           if (cloudLogs) setLogs(cloudLogs);
+          if (cloudUsers) setUsers(cloudUsers);
         } catch (e) {
           console.error("Failed to load from cloud", e);
         } finally {
@@ -131,6 +193,12 @@ export default function App() {
     saveToCloud('logs', logs);
   }, [logs, isInitialized]);
 
+  useEffect(() => {
+    if (!isInitialized) return;
+    localStorage.setItem('users', JSON.stringify(users));
+    saveToCloud('users', users);
+  }, [users, isInitialized]);
+
   // Capture PWA install prompt
   useEffect(() => {
     const handler = (e: any) => {
@@ -142,23 +210,6 @@ export default function App() {
     return () => window.removeEventListener('beforeinstallprompt', handler);
   }, []);
 
-  // --- Login Logic ---
-  const handleLoginToggle = () => {
-      if (isLoggedIn) {
-          if (window.confirm("Bạn có chắc chắn muốn đăng xuất?")) {
-              setIsLoggedIn(false);
-              setActiveTab(Tab.CALENDAR); // Reset to safe tab
-          }
-      } else {
-          const password = prompt("Nhập mật khẩu quản trị:", "");
-          if (password === "123456") {
-              setIsLoggedIn(true);
-              alert("Đăng nhập thành công!");
-          } else if (password !== null) {
-              alert("Sai mật khẩu!");
-          }
-      }
-  };
 
   // --- Actions ---
 
@@ -171,7 +222,7 @@ export default function App() {
   };
 
   const addEmployee = (name: string) => {
-    if (!isLoggedIn) return;
+    if (!isAdmin) return;
     const newEmp: Employee = {
       id: Date.now().toString(),
       name,
@@ -182,14 +233,14 @@ export default function App() {
   };
 
   const removeEmployee = (id: string) => {
-    if (!isLoggedIn) return;
+    if (!isAdmin) return;
     const emp = employees.find(e => e.id === id);
     setEmployees(employees.filter(e => e.id !== id));
     addLog('Xóa nhân viên', `Đã xóa nhân viên: ${emp?.name || id}`);
   };
 
   const updateLunchRecord = (date: string, newItems: LunchItem[]) => {
-    if (!isLoggedIn) return;
+    if (!isAdmin) return;
     const prevRecord = lunchRecords.find(r => r.date === date);
     
     // Log details
@@ -218,7 +269,7 @@ export default function App() {
   };
 
   const processPayment = (employeeId: string, amount: number) => {
-    if (!isLoggedIn) return;
+    if (!isAdmin) return;
     const emp = employees.find(e => e.id === employeeId);
     setEmployees(emps => emps.map(e => 
       e.id === employeeId ? { ...e, balance: e.balance + amount } : e
@@ -227,7 +278,7 @@ export default function App() {
   };
 
   const adjustBalance = (employeeId: string, amount: number) => {
-    if (!isLoggedIn) return;
+    if (!isAdmin) return;
     const emp = employees.find(e => e.id === employeeId);
     setEmployees(emps => emps.map(e => 
       e.id === employeeId ? { ...e, balance: e.balance + amount } : e
@@ -236,13 +287,13 @@ export default function App() {
   };
 
   const addExpense = (expense: ExpenseRecord) => {
-    if (!isLoggedIn) return;
+    if (!currentUser) return;
     setExpenseRecords([...expenseRecords, expense]);
-    addLog('Thêm chi tiêu', `Chi: ${expense.title} - ${formatCurrency(expense.amount)}`);
+    addLog('Thêm chi tiêu', `Chi (${currentUser.username}): ${expense.title} - ${formatCurrency(expense.amount)}`);
   };
 
   const removeExpense = (id: string) => {
-    if (!isLoggedIn) return;
+    if (!currentUser) return;
     const exp = expenseRecords.find(e => e.id === id);
     setExpenseRecords(expenseRecords.filter(e => e.id !== id));
     addLog('Xóa chi tiêu', `Xóa khoản chi: ${exp?.title}`);
@@ -257,7 +308,8 @@ export default function App() {
       lunchRecords,
       expenseRecords,
       settings,
-      logs
+      logs,
+      users // Also export users for backup
     };
     
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
@@ -273,8 +325,8 @@ export default function App() {
   };
 
   const handleImportData = (event: React.ChangeEvent<HTMLInputElement>) => {
-    if (!isLoggedIn) {
-        alert("Vui lòng đăng nhập để khôi phục dữ liệu.");
+    if (!isAdmin) {
+        alert("Chỉ Admin mới có quyền khôi phục dữ liệu hệ thống.");
         return;
     }
     const file = event.target.files?.[0];
@@ -295,6 +347,10 @@ export default function App() {
           if (data.expenseRecords) setExpenseRecords(data.expenseRecords);
           if (data.settings) setSettings(data.settings);
           if (data.logs) setLogs(data.logs);
+          // Optional: Import users? Maybe risky to overwrite users. Let's merge or skip for now to be safe, or just import if admin wants.
+          // For simplicity in this tool, let's import users if they exist in backup to ensure full restore.
+          if (data.users) setUsers(data.users); 
+
           alert("Khôi phục dữ liệu thành công!");
           addLog('Khôi phục dữ liệu', 'Đã khôi phục từ file backup');
         }
@@ -308,7 +364,7 @@ export default function App() {
   };
 
   const handleResetData = () => {
-    if (!isLoggedIn) return;
+    if (!isAdmin) return;
     if (window.confirm("CẢNH BÁO: Tất cả dữ liệu sẽ bị xóa. Bạn có chắc chắn không?")) {
        setEmployees([]);
        setLunchRecords([]);
@@ -342,7 +398,7 @@ export default function App() {
     { id: Tab.EMPLOYEES, label: 'Nhân sự', icon: Users, color: 'text-teal-600' },
   ];
 
-  if (isLoggedIn) {
+  if (isAdmin) {
       navItems.push({ id: Tab.LOGS, label: 'Logs', icon: History, color: 'text-gray-600' });
   }
 
@@ -360,6 +416,15 @@ export default function App() {
     // FIX: Sử dụng h-[100dvh] để đảm bảo full chiều cao màn hình thiết bị, loại bỏ fixed inset-0 gây lỗi
     <div className="bg-gray-50 h-[100dvh] w-full overflow-hidden flex flex-col font-sans text-gray-900 relative">
       
+      {/* Auth Modal */}
+      <AuthModal 
+        isOpen={isAuthModalOpen} 
+        onClose={() => setIsAuthModalOpen(false)}
+        onLogin={handleLogin}
+        onRegister={handleRegister}
+        users={users}
+      />
+
       {/* Header */}
       <header className="bg-white/85 backdrop-blur-xl border-b border-gray-100 px-4 py-3 flex justify-between items-center z-40 sticky top-0 shadow-sm transition-all">
         <div className="flex items-center gap-3">
@@ -376,10 +441,15 @@ export default function App() {
         </div>
         <div className="flex gap-2">
             <button 
-                onClick={handleLoginToggle}
-                className={`p-2.5 rounded-full transition-all duration-300 ${isLoggedIn ? 'bg-green-100 text-green-600' : 'bg-gray-100 text-gray-500'}`}
+                onClick={currentUser ? handleLogout : () => setIsAuthModalOpen(true)}
+                className={`p-2 rounded-full transition-all duration-300 flex items-center gap-2 pr-3 ${currentUser ? 'bg-green-50 text-green-600 pl-2' : 'bg-gray-100 text-gray-500 pl-3'}`}
             >
-                {isLoggedIn ? <Unlock size={22} strokeWidth={2} /> : <Lock size={22} strokeWidth={2} />}
+                {currentUser ? (
+                    <>
+                      <UserCircle2 size={22} />
+                      <span className="text-xs font-bold max-w-[60px] truncate">{currentUser.username}</span>
+                    </>
+                ) : <Lock size={22} strokeWidth={2} />}
             </button>
             <button 
                 onClick={() => setActiveTab(Tab.SETTINGS)}
@@ -400,7 +470,7 @@ export default function App() {
                 lunchRecords={lunchRecords} 
                 defaultCost={settings.costPerMeal}
                 onSaveLunch={updateLunchRecord}
-                readOnly={!isLoggedIn} 
+                readOnly={!isAdmin} 
               />
             </div>
           )}
@@ -413,7 +483,8 @@ export default function App() {
                 onRemoveExpense={removeExpense}
                 currencyFormatter={formatCurrency}
                 themeColor={settings.expenseThemeColor}
-                readOnly={!isLoggedIn}
+                currentUser={currentUser}
+                onOpenLogin={() => setIsAuthModalOpen(true)}
               />
             </div>
           )}
@@ -436,7 +507,7 @@ export default function App() {
                 onRemoveEmployee={removeEmployee}
                 onAdjustBalance={adjustBalance}
                 currencyFormatter={formatCurrency}
-                readOnly={!isLoggedIn}
+                readOnly={!isAdmin}
               />
             </div>
           )}
@@ -447,12 +518,12 @@ export default function App() {
                 employees={employees}
                 onConfirmPayment={processPayment}
                 currencyFormatter={formatCurrency}
-                readOnly={!isLoggedIn}
+                readOnly={!isAdmin}
               />
             </div>
           )}
 
-          {activeTab === Tab.LOGS && isLoggedIn && (
+          {activeTab === Tab.LOGS && isAdmin && (
               <div className="animate-fade-in h-full">
                   <LogViewer logs={logs} />
               </div>
@@ -486,7 +557,7 @@ export default function App() {
                        <input 
                           type="number" 
                           value={settings.costPerMeal}
-                          disabled={!isLoggedIn}
+                          disabled={!isAdmin}
                           onChange={(e) => setSettings({ ...settings, costPerMeal: Number(e.target.value) })}
                           className="w-full p-4 pl-12 bg-gray-50 border border-gray-200 rounded-xl focus:bg-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 transition-all outline-none font-bold text-gray-800 disabled:opacity-50"
                        />
@@ -499,7 +570,7 @@ export default function App() {
                         {themeColors.map((t) => (
                           <button
                             key={t.id}
-                            disabled={!isLoggedIn}
+                            disabled={!currentUser}
                             onClick={() => setSettings({ ...settings, expenseThemeColor: t.id })}
                             className={`w-10 h-10 rounded-full ${t.class} flex items-center justify-center transition-transform hover:scale-110 shadow-sm ${settings.expenseThemeColor === t.id ? 'ring-2 ring-offset-2 ring-gray-400 scale-110' : 'opacity-80 hover:opacity-100'} disabled:opacity-30`}
                           >
@@ -533,13 +604,13 @@ export default function App() {
                        <Download size={18} /> Sao lưu dữ liệu (.json)
                      </button>
                      <div className="relative">
-                       <input type="file" accept=".json" ref={fileInputRef} onChange={handleImportData} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" disabled={!isLoggedIn} />
-                       <button className={`flex items-center justify-center gap-2 w-full p-4 bg-gray-50 text-gray-700 font-bold rounded-xl border border-gray-200 hover:bg-gray-100 transition-colors pointer-events-none ${!isLoggedIn ? 'opacity-50' : ''}`}>
+                       <input type="file" accept=".json" ref={fileInputRef} onChange={handleImportData} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" disabled={!isAdmin} />
+                       <button className={`flex items-center justify-center gap-2 w-full p-4 bg-gray-50 text-gray-700 font-bold rounded-xl border border-gray-200 hover:bg-gray-100 transition-colors pointer-events-none ${!isAdmin ? 'opacity-50' : ''}`}>
                          <Upload size={18} /> Khôi phục dữ liệu
                        </button>
                      </div>
                      <div className="pt-4 border-t border-gray-100 mt-2">
-                       <button onClick={handleResetData} disabled={!isLoggedIn} className="flex items-center justify-center gap-2 w-full p-4 bg-red-50 text-red-600 font-bold rounded-xl border border-red-100 hover:bg-red-100 transition-colors disabled:opacity-50">
+                       <button onClick={handleResetData} disabled={!isAdmin} className="flex items-center justify-center gap-2 w-full p-4 bg-red-50 text-red-600 font-bold rounded-xl border border-red-100 hover:bg-red-100 transition-colors disabled:opacity-50">
                          <Trash2 size={18} /> <span className="flex items-center gap-1">Xóa toàn bộ <AlertTriangle size={14} /></span>
                        </button>
                      </div>
@@ -548,7 +619,7 @@ export default function App() {
               </div>
               
               <div className="text-center pb-8">
-                 <p className="text-xs font-semibold text-gray-300 uppercase tracking-widest">TrangNQ Tools v1.4.0</p>
+                 <p className="text-xs font-semibold text-gray-300 uppercase tracking-widest">TrangNQ Tools v1.5.0</p>
               </div>
             </div>
           )}

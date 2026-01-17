@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
-import { ExpenseRecord } from '../types';
-import { ChevronLeft, ChevronRight, Plus, Trash2, Calendar as CalIcon, BarChart3, X, Zap, Lock } from 'lucide-react';
+import { ExpenseRecord, User } from '../types';
+import { ChevronLeft, ChevronRight, Plus, Trash2, Calendar as CalIcon, BarChart3, X, Zap, Lock, LogIn } from 'lucide-react';
 
 interface ExpenseManagerProps {
   expenses: ExpenseRecord[];
@@ -8,7 +8,8 @@ interface ExpenseManagerProps {
   onRemoveExpense: (id: string) => void;
   currencyFormatter: (val: number) => string;
   themeColor: string;
-  readOnly?: boolean;
+  currentUser: User | null;
+  onOpenLogin: () => void;
 }
 
 type ViewMode = 'calendar' | 'stats';
@@ -19,7 +20,8 @@ export const ExpenseManager: React.FC<ExpenseManagerProps> = ({
   onRemoveExpense,
   currencyFormatter,
   themeColor,
-  readOnly = false
+  currentUser,
+  onOpenLogin
 }) => {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [viewMode, setViewMode] = useState<ViewMode>('calendar');
@@ -33,6 +35,46 @@ export const ExpenseManager: React.FC<ExpenseManagerProps> = ({
   // --- Quick Entry State ---
   const [showQuickAdd, setShowQuickAdd] = useState(false);
   
+  // --- ACCESS DENIED VIEW (Not Logged In) ---
+  if (!currentUser) {
+      return (
+          <div className="h-full flex flex-col items-center justify-center p-6 text-center text-gray-500 space-y-6">
+             <div className="bg-gray-100 p-6 rounded-full">
+                <Lock size={48} className="text-gray-400" />
+             </div>
+             <div>
+               <h2 className="text-xl font-bold text-gray-800 mb-2">Quản lý chi tiêu cá nhân</h2>
+               <p className="max-w-xs text-sm leading-relaxed">
+                 Vui lòng đăng nhập hoặc đăng ký tài khoản để sử dụng tính năng quản lý quỹ riêng của bạn. Dữ liệu của bạn sẽ được bảo mật.
+               </p>
+             </div>
+             <button 
+               onClick={onOpenLogin}
+               className="bg-blue-600 text-white px-6 py-3 rounded-xl font-bold shadow-lg shadow-blue-200 hover:bg-blue-700 transition-all flex items-center gap-2"
+             >
+               <LogIn size={20} />
+               Đăng nhập / Đăng ký
+             </button>
+          </div>
+      );
+  }
+
+  // --- Data Logic (Filter by User) ---
+  // If admin: show Global/Shared expenses (where userId is missing or 'admin')
+  // If user: show their own expenses (where userId === currentUser.id)
+  
+  const userExpenses = useMemo(() => {
+    return expenses.filter(e => {
+      if (currentUser.role === 'admin') {
+        // Admin sees expenses with no userId (legacy/shared) OR userId = 'admin'
+        return !e.userId || e.userId === 'admin';
+      } else {
+        // Normal user sees only their own
+        return e.userId === currentUser.id;
+      }
+    });
+  }, [expenses, currentUser]);
+
   // Initialize date with Local Date string
   const getTodayString = () => {
      const d = new Date();
@@ -43,19 +85,6 @@ export const ExpenseManager: React.FC<ExpenseManagerProps> = ({
   const [quickTitle, setQuickTitle] = useState('');
   const [quickAmount, setQuickAmount] = useState('');
   const [quickNote, setQuickNote] = useState('');
-
-  // --- ACCESS DENIED VIEW ---
-  if (readOnly) {
-      return (
-          <div className="h-full flex flex-col items-center justify-center p-6 text-center text-gray-500">
-             <div className="bg-gray-100 p-4 rounded-full mb-4">
-                <Lock size={48} className="text-gray-400" />
-             </div>
-             <h2 className="text-xl font-bold text-gray-800 mb-2">Quyền truy cập bị hạn chế</h2>
-             <p className="max-w-xs">Mục "Quản lý quỹ" chứa thông tin riêng tư. Vui lòng đăng nhập để xem và quản lý chi tiêu.</p>
-          </div>
-      );
-  }
 
   // --- Helpers ---
   // Fix: Sử dụng Local Time
@@ -83,9 +112,9 @@ export const ExpenseManager: React.FC<ExpenseManagerProps> = ({
   };
   const theme = getThemeStyles();
 
-  // --- Data Logic ---
+  // --- Data Logic with userExpenses ---
   const monthKey = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}`;
-  const monthlyExpenses = expenses.filter(e => e.date.startsWith(monthKey));
+  const monthlyExpenses = userExpenses.filter(e => e.date.startsWith(monthKey));
   
   // Group expenses by date for Calendar view
   const expensesByDate = useMemo(() => {
@@ -129,6 +158,7 @@ export const ExpenseManager: React.FC<ExpenseManagerProps> = ({
     if (selectedDateStr && newTitle && newAmount) {
       onAddExpense({
         id: Date.now().toString(),
+        userId: currentUser.id,
         date: selectedDateStr,
         title: newTitle,
         amount: Number(newAmount),
@@ -144,6 +174,7 @@ export const ExpenseManager: React.FC<ExpenseManagerProps> = ({
     if (quickDate && quickTitle && quickAmount) {
       onAddExpense({
         id: Date.now().toString(),
+        userId: currentUser.id,
         date: quickDate,
         title: quickTitle,
         amount: Number(quickAmount),
@@ -227,8 +258,15 @@ export const ExpenseManager: React.FC<ExpenseManagerProps> = ({
     <div className="flex-1 overflow-y-auto p-1 space-y-4">
       {/* Summary */}
       <div className={`bg-gradient-to-r ${theme.gradient} p-5 rounded-2xl text-white shadow-lg`}>
-        <h3 className={`text-xs font-bold uppercase opacity-80`}>Tổng chi tháng {currentDate.getMonth() + 1}</h3>
-        <div className="text-3xl font-bold mt-1">{currencyFormatter(stats.totalMonth)}</div>
+        <div className="flex justify-between items-start">
+           <div>
+             <h3 className={`text-xs font-bold uppercase opacity-80`}>Tổng chi tháng {currentDate.getMonth() + 1}</h3>
+             <div className="text-3xl font-bold mt-1">{currencyFormatter(stats.totalMonth)}</div>
+           </div>
+           <div className="bg-white/20 p-2 rounded-lg">
+              <span className="text-xs font-bold">{currentUser.username}</span>
+           </div>
+        </div>
       </div>
 
       <div className="space-y-4">
@@ -426,10 +464,10 @@ export const ExpenseManager: React.FC<ExpenseManagerProps> = ({
               {/* List */}
               <div className="space-y-2">
                 <h4 className="font-bold text-gray-700 text-sm uppercase">Danh sách đã chi</h4>
-                {expenses.filter(e => e.date === selectedDateStr).length === 0 && (
+                {userExpenses.filter(e => e.date === selectedDateStr).length === 0 && (
                   <p className="text-gray-400 text-sm text-center py-2">Chưa có khoản chi nào.</p>
                 )}
-                {expenses.filter(e => e.date === selectedDateStr).map(item => (
+                {userExpenses.filter(e => e.date === selectedDateStr).map(item => (
                    <div key={item.id} className="flex justify-between items-center bg-white border border-gray-200 p-3 rounded-xl shadow-sm">
                       <div>
                         <div className="font-bold text-gray-800">{item.title}</div>

@@ -18,6 +18,7 @@ export interface LunchRecord {
 
 export interface ExpenseRecord {
   id: string;
+  userId?: string; // ID của người tạo khoản chi này. Nếu undefined/null là quỹ chung (Admin)
   date: string; // YYYY-MM-DD
   title: string;
   amount: number;
@@ -40,6 +41,19 @@ export interface SystemLog {
   timestamp: string;
   action: string;
   details: string;
+}
+
+export interface User {
+  id: string;
+  username: string;
+  password: string; // In real app, this should be hashed. Here we keep simple for demo/local tool.
+  role: 'admin' | 'user';
+  createdAt: string;
+}
+
+export interface AuthSession {
+  user: User;
+  expiresAt: number; // Timestamp
 }
 
 export enum Tab {
