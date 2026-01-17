@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo } from 'react';
 import { DebtRecord, User, ThemeClasses } from '../types';
-import { Plus, ArrowUpRight, ArrowDownLeft, CheckCircle2, Circle, Trash2, Edit2, Calendar, X, AlertCircle } from 'lucide-react';
+import { Plus, ArrowUpRight, ArrowDownLeft, Trash2, Calendar, X } from 'lucide-react';
 
 interface DebtBookProps {
   debts: DebtRecord[];
