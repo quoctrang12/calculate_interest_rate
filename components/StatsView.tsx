@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { Employee, LunchRecord } from '../types';
-import { TrendingDown, TrendingUp, CalendarDays, ChevronLeft, ChevronRight, Receipt, LayoutList } from 'lucide-react';
+import { TrendingDown, TrendingUp, CalendarDays, ChevronLeft, ChevronRight, Receipt, LayoutList, BarChart3, List } from 'lucide-react';
 
 interface StatsViewProps {
   employees: Employee[];
@@ -8,12 +8,15 @@ interface StatsViewProps {
   currencyFormatter: (val: number) => string;
 }
 
+type ViewMode = 'list' | 'chart';
+
 export const StatsView: React.FC<StatsViewProps> = ({
   employees,
   lunchRecords,
   currencyFormatter
 }) => {
   const [currentDate, setCurrentDate] = useState(new Date());
+  const [viewMode, setViewMode] = useState<ViewMode>('list');
 
   const prevMonth = () => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1));
   const nextMonth = () => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1));
@@ -49,12 +52,11 @@ export const StatsView: React.FC<StatsViewProps> = ({
         history: meals.sort((a, b) => b.date.localeCompare(a.date))
       };
     });
+    // Sort employees by total cost descending
     empStats.sort((a, b) => b.totalMealCost - a.totalMealCost);
 
 
     // -- Weekly Breakdown Stats (T2 -> CN) --
-    
-    // 1. Tạo danh sách các tuần trong tháng dựa trên lịch thực tế (T2 - CN)
     const weeksInMonth: { id: number; start: number; end: number; label: string }[] = [];
     const daysInMonth = new Date(year, month + 1, 0).getDate();
     
@@ -71,7 +73,6 @@ export const StatsView: React.FC<StatsViewProps> = ({
                 id: weekIndex,
                 start: currentWeekStart,
                 end: d,
-                // Sử dụng month + 1 để hiển thị đúng tháng hiện tại, tránh dùng dateObj của record có thể bị sai
                 label: `${currentWeekStart}/${month + 1} - ${d}/${month + 1}`
             });
             currentWeekStart = d + 1;
@@ -83,29 +84,72 @@ export const StatsView: React.FC<StatsViewProps> = ({
     const weeklyData = weeksInMonth.map(week => {
          const employeeSpending: Record<string, number> = {};
          let hasData = false;
+         let weekTotal = 0;
          
          monthlyRecords.forEach(r => {
-             // Parse ngày trực tiếp từ chuỗi YYYY-MM-DD để tránh lỗi múi giờ
              const day = parseInt(r.date.split('-')[2]);
              
              if (day >= week.start && day <= week.end) {
                  r.items.forEach(item => {
                      employeeSpending[item.employeeId] = (employeeSpending[item.employeeId] || 0) + item.price;
+                     weekTotal += item.price;
                      hasData = true;
                  });
              }
          });
 
+         // Convert employeeSpending object to sorted array immediately for easier rendering
+         const sortedSpenders = Object.entries(employeeSpending)
+            .sort(([, a], [, b]) => b - a) // Giảm dần theo số tiền
+            .map(([empId, amount]) => {
+                const emp = employees.find(e => e.id === empId);
+                return { emp, amount };
+            })
+            .filter(item => item.emp !== undefined);
+
          return {
              week: week.id,
              label: week.label,
-             employeeSpending,
+             spenders: sortedSpenders,
+             weekTotal,
              hasData
          };
-    }).filter(w => w.hasData); // Chỉ hiện tuần nào có dữ liệu chi tiêu
+    }).filter(w => w.hasData); // Chỉ giữ lại tuần có dữ liệu
 
     return { totalSpentMonth, empStats, weeklyData };
   }, [employees, lunchRecords, currentDate]);
+
+  // -- Render Charts Helper --
+  const renderWeeklyChart = () => {
+    if (stats.weeklyData.length === 0) return (
+       <div className="text-center py-10 text-gray-400 italic">Chưa có dữ liệu để vẽ biểu đồ.</div>
+    );
+
+    const maxWeekVal = Math.max(...stats.weeklyData.map(w => w.weekTotal), 1);
+
+    return (
+      <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm mt-4">
+          <div className="flex items-end justify-between h-48 gap-3 px-2">
+            {stats.weeklyData.map((week) => {
+               const heightPercent = (week.weekTotal / maxWeekVal) * 100;
+               return (
+                  <div key={week.week} className="flex flex-col items-center flex-1 group">
+                     <div className="mb-1 text-[10px] font-bold text-gray-500 opacity-0 group-hover:opacity-100 transition-opacity">
+                        {currencyFormatter(week.weekTotal)}
+                     </div>
+                     <div 
+                        className="w-full bg-blue-500 rounded-t-lg transition-all duration-500 hover:bg-blue-600 relative min-h-[4px]"
+                        style={{ height: `${heightPercent}%` }}
+                     >
+                     </div>
+                     <div className="mt-2 text-xs font-bold text-gray-600">Tuần {week.week}</div>
+                  </div>
+               );
+            })}
+          </div>
+      </div>
+    );
+  };
 
   return (
     <div className="p-4 pb-24 space-y-6">
@@ -133,33 +177,54 @@ export const StatsView: React.FC<StatsViewProps> = ({
 
       {/* Weekly Breakdown Section */}
       <div className="space-y-3">
-        <h3 className="font-bold text-gray-800 text-lg flex items-center gap-2">
-           <LayoutList size={20} className="text-blue-600"/> 
-           Chi tiêu theo tuần
-        </h3>
-        {stats.weeklyData.length === 0 && <p className="text-gray-400 italic text-sm">Chưa có dữ liệu tuần.</p>}
-        
-        {stats.weeklyData.map(week => (
-           <div key={week.week} className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
-              <div className="bg-gray-50 px-4 py-2 border-b border-gray-100 flex justify-between items-center">
-                 <span className="font-bold text-gray-700">Tuần {week.week} ({week.label})</span>
-              </div>
-              <div className="p-2 divide-y divide-gray-100">
-                 {Object.entries(week.employeeSpending)
-                    .sort(([, a], [, b]) => b - a) // Sort by spending desc
-                    .map(([empId, amount]) => {
-                      const emp = employees.find(e => e.id === empId);
-                      if (!emp) return null;
-                      return (
-                        <div key={empId} className="flex justify-between py-2 px-2 text-sm">
-                           <span className="text-gray-700">{emp.name}</span>
-                           <span className="font-medium text-red-500">-{currencyFormatter(amount)}</span>
-                        </div>
-                      );
-                    })}
-              </div>
-           </div>
-        ))}
+        <div className="flex items-center justify-between">
+            <h3 className="font-bold text-gray-800 text-lg flex items-center gap-2">
+            <LayoutList size={20} className="text-blue-600"/> 
+            Chi tiêu theo tuần
+            </h3>
+            
+            {/* View Toggle */}
+            <div className="flex bg-gray-200 p-1 rounded-lg">
+                <button 
+                  onClick={() => setViewMode('list')}
+                  className={`p-1.5 rounded-md transition-all ${viewMode === 'list' ? 'bg-white shadow text-blue-600' : 'text-gray-500 hover:text-gray-700'}`}
+                >
+                    <List size={18} />
+                </button>
+                <button 
+                  onClick={() => setViewMode('chart')}
+                  className={`p-1.5 rounded-md transition-all ${viewMode === 'chart' ? 'bg-white shadow text-blue-600' : 'text-gray-500 hover:text-gray-700'}`}
+                >
+                    <BarChart3 size={18} />
+                </button>
+            </div>
+        </div>
+
+        {viewMode === 'chart' ? (
+            renderWeeklyChart()
+        ) : (
+            <>
+                {stats.weeklyData.length === 0 && <p className="text-gray-400 italic text-sm">Chưa có dữ liệu tuần.</p>}
+                
+                {/* .slice().reverse() để đưa tuần mới nhất (lớn nhất) lên đầu */}
+                {stats.weeklyData.slice().reverse().map(week => (
+                <div key={week.week} className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
+                    <div className="bg-gray-50 px-4 py-2 border-b border-gray-100 flex justify-between items-center">
+                        <span className="font-bold text-gray-700">Tuần {week.week} ({week.label})</span>
+                        <span className="font-bold text-blue-600 text-sm">{currencyFormatter(week.weekTotal)}</span>
+                    </div>
+                    <div className="p-2 divide-y divide-gray-100">
+                        {week.spenders.map(({ emp, amount }) => (
+                            <div key={emp?.id} className="flex justify-between py-2 px-2 text-sm">
+                                <span className="text-gray-700">{emp?.name}</span>
+                                <span className="font-medium text-red-500">-{currencyFormatter(amount)}</span>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+                ))}
+            </>
+        )}
       </div>
 
       {/* Employee Details Section */}
